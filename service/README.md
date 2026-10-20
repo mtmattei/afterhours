@@ -1,28 +1,18 @@
-# Sites Worker ESM starter
+# Afterhours shared service
 
-Use this starter for a static microsite, click counter, or simple internal UI whose state is browser-scoped. It has no dependencies and needs no install.
+Build from the repository root with `npm run build:service`.
+The builder bundles the shared game model, furniture definitions, session rules
+and Worker adapter into `dist/server/index.js`.
 
-Edit `worker/index.js`, then publish through the Sites hosting workflow with this starter's build and validation in `commands`.
+Apply `drizzle/0000_world.sql` and bind D1 as `DB`. Configure `FRONTEND_ORIGIN`
+with the verified HTTPS origin of the public Uno client. The client runtime
+configuration must point to this service's verified HTTPS origin.
 
-The build copies only `worker/index.js` and `.openai/hosting.json`. Do not add standalone asset files. Embed any essential raster bytes in `worker/index.js` and serve or reference them as a data URL.
+This bounded playtest backend stores one world snapshot with optimistic
+revision checks. Trades and purchases commit atomically; failed writes leave
+all ownership unchanged. It caps guest accounts at 100 and world storage at
+1.7 MB. Room-level persistence, moderation operations and recoverable accounts
+are required before an unrestricted launch.
 
-Pass these argument arrays as `commands`:
-
-```json
-[
-  ["bash", "scripts/build.sh"],
-  ["node", "scripts/validate-artifact.mjs"]
-]
-```
-
-The deterministic build produces:
-
-```text
-dist/
-├── .openai/
-│   └── hosting.json
-└── server/
-    └── index.js
-```
-
-`dist/server/index.js` is an ES module with a default export containing `fetch(request, env, ctx)`. Edit `worker/index.js`, not the generated file under `dist/`.
+No production deployment has been completed. The Sites publishing helper was
+blocked by the current session's approval configuration.

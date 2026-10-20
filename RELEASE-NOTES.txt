@@ -8,7 +8,7 @@ per UTC day bound the initial free test. Exhaustion pauses access, keeping saves
 A preparation script packages the compiled Uno app and API for Cloudflare;
 PLAYTEST-SETUP.md covers configuration, deployment and private backup rehearsal.
 
-Validation: 43 Node test cases, including signed identity/expiry checks,
+Validation: 44 Node test cases, including signed identity/expiry checks,
 account-link continuity, foreign-account isolation, transient failure recovery,
 request limits and concurrent SQLite transactions. Account screens were checked
 in a local browser fixture. Actual Google OAuth, CAPTCHA, cross-device recovery,

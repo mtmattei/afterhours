@@ -1,6 +1,6 @@
 // The SDK owns token refresh. A remembered identity must never be replaced
 // automatically when a request fails or a refresh token becomes unavailable.
-export function createAccounts(auth, storage, navigate, callbackUrl) {
+export function createAccounts(auth, storage, navigate, callbackUrl, withEntryLock = work => work()) {
   const marker = 'afterhours-account-id';
   async function session() {
     const {data, error} = await auth.getSession();
@@ -56,6 +56,6 @@ export function createAccounts(auth, storage, navigate, callbackUrl) {
     storage.setItem('afterhours-account-resume', '1');
     storage.removeItem('afterhours-account-flow');
   }
-  return {enter, token, current, link: () => redirect('link'), restore: () => redirect('restore'), finish,
+  return {enter: captcha => withEntryLock(() => enter(captcha)), token, current, link: () => redirect('link'), restore: () => redirect('restore'), finish,
     remembered: () => !!storage.getItem(marker)};
 }

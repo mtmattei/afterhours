@@ -7,8 +7,13 @@ if (config?.url && config?.publishableKey) {
     flowType: 'pkce', detectSessionInUrl: false, persistSession: true, autoRefreshToken: true,
     storageKey: 'afterhours-managed-session'
   }});
+  let entry = Promise.resolve();
+  const withEntryLock = work => {
+    if(navigator.locks)return navigator.locks.request('afterhours-account-entry',work);
+    const task = entry.then(work,work);entry=task.catch(()=>{});return task;
+  };
   window.AfterhoursAccount = createAccounts(client.auth, localStorage,
-    url => window.top.location.assign(url), new URL('account-callback.html', location.href).href.split('?')[0].split('#')[0]);
+    url => window.top.location.assign(url), new URL('account-callback.html', location.href).href.split('?')[0].split('#')[0],withEntryLock);
   let loader;
   window.AfterhoursAccount.challenge = async element => {
     if (!config.turnstileSiteKey) throw Error('Guest entry is waiting for the host to configure the security check.');

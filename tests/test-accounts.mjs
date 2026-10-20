@@ -73,6 +73,17 @@ test('link callback rejects an unexpected account without moving the remembered 
   await assert.rejects(account.finish('?code=one-use'), /did not match/);
   assert.equal(store.getItem('afterhours-account-id'), id);
 });
+test('simultaneous first joins share one guest through the browser entry lock',async()=>{
+  const store=memory();let value=null,created=0,queue=Promise.resolve();
+  const auth={
+    getSession:async()=>({data:{session:value}}),
+    signInAnonymously:async()=>{created++;value=session();return {data:{session:value}};}
+  };
+  const lock=work=>{const task=queue.then(work);queue=task.catch(()=>{});return task;};
+  const tab1=createAccounts(auth,store,()=>{},'',lock),tab2=createAccounts(auth,store,()=>{},'',lock);
+  await Promise.all([tab1.enter('captcha'),tab2.enter('captcha')]);
+  assert.equal(created,1);assert.equal(store.getItem('afterhours-account-id'),id);
+});
 test('server verifies signed identity, expiry, issuer, audience and role', async () => {
   const pair = await generateKeyPair('ES256'), jwk = await exportJWK(pair.publicKey);
   const keys = createLocalJWKSet({keys: [{...jwk, kid: 'test', alg: 'ES256'}]});

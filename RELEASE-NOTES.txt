@@ -3,8 +3,12 @@ UNRELEASED — FREE PLAYTEST DEPLOYMENT
 20 October 2026: the compiled Uno app and shared service are deployed at
 https://afterhours-playtest.matthewtmattei.workers.dev/
 Cloudflare Workers/D1 and Supabase remain on Free plans. Google sign-in is
-prepared but not enabled; creating its web client and connecting the private
-credential to Supabase await owner approval. This is an operator test.
+enabled using a dedicated web client and the exact Supabase callback. Its secret
+is stored only in Supabase. The Google app remains in Testing with the owner
+added. Consent, guest linking and the separate Restore account flow completed
+in the current browser. Server comparison against the pre-link backup confirms
+the account mapping and complete saved game stayed unchanged. Recovery from a
+fresh browser/device remains unverified. This is an operator test.
 
 Guest-first Supabase authentication with Google linking/recovery; signed server
 identity verification; D1 saves retain the same character after account linking.
@@ -22,7 +26,7 @@ daily reward, furniture purchase/placement and the same saved character after
 reload. A named track saved to the server. Invalid identity and CAPTCHA tokens
 are rejected. A private D1 export restored exactly into an isolated local D1
 database, retaining identity ownership, the room, nine items and one song.
-Google OAuth/cross-browser recovery, live two-player trades, capacity/usage and
+Cross-browser/device recovery, live two-player trades, capacity/usage and
 remote disaster recovery remain unverified. The published v0.5.0 assets below
 are unchanged; they predate this deployed managed-account build.
 

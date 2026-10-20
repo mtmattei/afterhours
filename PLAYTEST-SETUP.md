@@ -2,9 +2,19 @@
 
 Status (20 October 2026): the compiled Uno app and shared service are deployed at
 https://afterhours-playtest.matthewtmattei.workers.dev/ on the Free plans.
-Guest entry and persistent saves are verified. Google recovery is not enabled
-yet: its consent configuration is created, and its web client is prepared;
-creating the client and connecting its secret to Supabase await owner approval.
+Guest entry and persistent saves are verified. Google sign-in is enabled in
+Supabase with a dedicated web client and the exact Supabase callback URI. The
+private client secret is stored only in Supabase's provider settings. The Google
+app remains External/Testing, with the owner added as a test user.
+
+The live linking flow requests only email and profile information. The owner
+completed consent, linked the existing guest, and returned through the callback
+to the same character. The separate **Restore account with Google** flow also
+completed in the current browser. A server comparison against the pre-link
+backup confirmed the account-to-character mapping and complete game state were
+unchanged: no replacement character was created. A fresh browser or separate
+device has not been tested. Add invited testers to Google's test audience before
+they try linking or recovery.
 The downloadable v0.5.0 preview is separate from this newer playtest work.
 
 Verified on the live HTTPS app: real Turnstile-protected guest signup, a daily
@@ -20,7 +30,7 @@ character, one room, nine furniture items and one song. The live database was
 not overwritten. This verifies the export format and local restoration, not a
 remote disaster-recovery exercise or recovery of Supabase identities.
 
-Still unverified live: Google linking and recovery from a fresh browser,
+Still unverified live: Google recovery from a fresh browser or separate device,
 two-player trades, full-capacity and daily-limit behavior, and provider CPU/usage
 under load. Keep this an operator test until those checks pass; the five-player
 cap does not make it ready for broad social promotion.

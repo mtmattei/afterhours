@@ -9,8 +9,9 @@ Original generated artwork and synthesized music; no original game assets are in
 
 The [limited free playtest](https://afterhours-playtest.matthewtmattei.workers.dev/)
 now runs the compiled Uno app with server saves. Guest entry and save continuity
-are verified; Google recovery is still being connected. Keep this to an operator
-test while the remaining [live acceptance checks](PLAYTEST-SETUP.md) are completed.
+are verified, including Google linking and restoration in the current browser.
+Keep this to an operator test while the remaining
+[live acceptance checks](PLAYTEST-SETUP.md) are completed.
 
 ## Play locally
 
@@ -98,7 +99,9 @@ Follow [PLAYTEST-SETUP.md](PLAYTEST-SETUP.md) for the free accounts, build,
 configuration, deployment, backup rehearsal and supervised acceptance test.
 Live guest signup, CAPTCHA rejection, saved purchases and room placement have
 been checked. A D1 export restored exactly into an isolated local D1 database.
-Google linking and cross-browser recovery remain unverified and disabled.
+Google sign-in is enabled for named test users. Linking and the separate Restore
+account flow both retained the same character and complete server-saved game
+state in the current browser. Recovery from another browser/device is unverified.
 
 [Download v0.5.0](https://github.com/mtmattei/afterhours/releases/tag/v0.5.0) for
 the standalone HTML and compiled Uno ZIP. That published preview predates the

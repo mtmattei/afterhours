@@ -1,7 +1,29 @@
 # Free, limited Afterhours playtest
 
-Status: prepared source; no public host or real Google login has been configured.
+Status (20 October 2026): the compiled Uno app and shared service are deployed at
+https://afterhours-playtest.matthewtmattei.workers.dev/ on the Free plans.
+Guest entry and persistent saves are verified. Google recovery is not enabled
+yet: its consent configuration is created, and its web client is prepared;
+creating the client and connecting its secret to Supabase await owner approval.
 The downloadable v0.5.0 preview is separate from this newer playtest work.
+
+Verified on the live HTTPS app: real Turnstile-protected guest signup, a daily
+reward, furniture purchase and placement, and returning to the same character
+after reload via **Join shared world > Continue my character**. The name,
+245-credit balance, reward claim and room layout remained intact. A named music
+track saved to the server. Invalid identity tokens return 401; invalid CAPTCHA
+tokens are rejected by Supabase with `captcha_failed`.
+
+A private D1 export was restored into an isolated **local D1** instance. The
+entire restored world matched the export exactly, including one identity and
+character, one room, nine furniture items and one song. The live database was
+not overwritten. This verifies the export format and local restoration, not a
+remote disaster-recovery exercise or recovery of Supabase identities.
+
+Still unverified live: Google linking and recovery from a fresh browser,
+two-player trades, full-capacity and daily-limit behavior, and provider CPU/usage
+under load. Keep this an operator test until those checks pass; the five-player
+cap does not make it ready for broad social promotion.
 
 The first test uses Cloudflare Workers static assets for the compiled Uno app,
 D1 for authoritative game saves, Supabase Auth for guest identities and Google

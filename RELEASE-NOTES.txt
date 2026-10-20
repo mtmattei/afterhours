@@ -1,4 +1,10 @@
-UNRELEASED — FREE PLAYTEST PREPARATION
+UNRELEASED — FREE PLAYTEST DEPLOYMENT
+
+20 October 2026: the compiled Uno app and shared service are deployed at
+https://afterhours-playtest.matthewtmattei.workers.dev/
+Cloudflare Workers/D1 and Supabase remain on Free plans. Google sign-in is
+prepared but not enabled; creating its web client and connecting the private
+credential to Supabase await owner approval. This is an operator test.
 
 Guest-first Supabase authentication with Google linking/recovery; signed server
 identity verification; D1 saves retain the same character after account linking.
@@ -11,9 +17,14 @@ PLAYTEST-SETUP.md covers configuration, deployment and private backup rehearsal.
 Validation: 44 Node test cases, including signed identity/expiry checks,
 account-link continuity, foreign-account isolation, transient failure recovery,
 request limits and concurrent SQLite transactions. Account screens were checked
-in a local browser fixture. Actual Google OAuth, CAPTCHA, cross-device recovery,
-provider quotas and backup restoration still require the live free accounts.
-No public playtest URL exists yet. The published v0.5.0 assets below are unchanged.
+in a local browser fixture. Live checks now confirm protected guest signup,
+daily reward, furniture purchase/placement and the same saved character after
+reload. A named track saved to the server. Invalid identity and CAPTCHA tokens
+are rejected. A private D1 export restored exactly into an isolated local D1
+database, retaining identity ownership, the room, nine items and one song.
+Google OAuth/cross-browser recovery, live two-player trades, capacity/usage and
+remote disaster recovery remain unverified. The published v0.5.0 assets below
+are unchanged; they predate this deployed managed-account build.
 
 AFTERHOURS 0.5 — PLAYABLE DEVELOPMENT BUILD
 20 October 2026
@@ -70,7 +81,8 @@ Development downloads:
   Players do not need .NET to run the compiled download.
 
 These are playable development downloads. A GitHub Release is not a hosted
-public multiplayer service. The live public game has not been deployed.
+public multiplayer service. The newer limited playtest is hosted separately at
+the address above.
 
 REMAINING
 The roadmap lists incomplete systems and public-release gates. This build is

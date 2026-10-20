@@ -7,6 +7,11 @@ and make a room your own.
 **Playable development build — not historical feature parity or a finished public service.**
 Original generated artwork and synthesized music; no original game assets are included.
 
+The [limited free playtest](https://afterhours-playtest.matthewtmattei.workers.dev/)
+now runs the compiled Uno app with server saves. Guest entry and save continuity
+are verified; Google recovery is still being connected. Keep this to an operator
+test while the remaining [live acceptance checks](PLAYTEST-SETUP.md) are completed.
+
 ## Play locally
 
 Install Node.js 22 or newer, then:
@@ -91,8 +96,9 @@ never silently replaces a remembered character.
 
 Follow [PLAYTEST-SETUP.md](PLAYTEST-SETUP.md) for the free accounts, build,
 configuration, deployment, backup rehearsal and supervised acceptance test.
-Google/CAPTCHA integration needs live provider configuration before it can be
-verified end to end. No public multiplayer deployment is claimed.
+Live guest signup, CAPTCHA rejection, saved purchases and room placement have
+been checked. A D1 export restored exactly into an isolated local D1 database.
+Google linking and cross-browser recovery remain unverified and disabled.
 
 [Download v0.5.0](https://github.com/mtmattei/afterhours/releases/tag/v0.5.0) for
 the standalone HTML and compiled Uno ZIP. That published preview predates the

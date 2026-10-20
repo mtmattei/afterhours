@@ -4,6 +4,7 @@ public sealed partial class MainPage : Page
 {
     public MainPage()
     {
+        global::Uno.Foundation.WebAssemblyRuntime.InvokeJS("window.AfterhoursUno.prepareWebView()");
         this.InitializeComponent();
         Loaded += async (_, _) => await OpenGameAsync();
     }

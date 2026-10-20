@@ -1,0 +1,47 @@
+AFTERHOURS 0.5 — PLAYABLE DEVELOPMENT BUILD
+20 October 2026
+
+NEW GAME SYSTEMS
+Fifteen furniture types and interactive objects; twelve personal rooms;
+catalog/search/blueprints; room lighting, doors, notes, playlists and events;
+an expanded music sequencer, library, discs and WAV export; performances;
+quests, daily gifts, XP, badges and a wallet ledger; an adoptable tabby;
+three playable arcade games; an optional shared-world service.
+
+SHARED WORLD
+Real guest presence, movement/posture, seat reservations, nearby chat, shouting,
+private whispers, friend requests, doorbell/host controls, music queues,
+shared playback timestamps, votes and two-party furniture trading.
+
+UNO PLATFORM
+A real Uno Platform / WinUI .NET 10 Browser WebAssembly app hosts the canvas
+game through WebView2. The Release publish completed locally. A compatibility
+hook normalizes DOM IDs at Uno 6.7.135's .NET 10 WebView callback boundary.
+The renderer is still JavaScript; this is not a complete native XAML rewrite.
+
+VALIDATION
+Game/model/database tests cover migration, ownership, purchases, duplicate
+rewards, gifts, blueprints, pets, movement, seating, private chat, trades,
+room doors, stage rewards, request limits and concurrent database writes.
+Browser checks observed chat progression, song saving/playback, stage rewards,
+pet adoption/training, furniture purchase/placement, room creation/lighting,
+arcade completion/rewards, real two-browser chat/presence and restored identity.
+The compiled Uno shell loads the playable game and its studio.
+
+PUBLICATION
+All source and original art are committed locally for:
+https://github.com/mtmattei/afterhours
+
+Only the initial README reached GitHub. The full push is pending: the Windows
+credential helper failed, and automatic approval review could not process the
+large artwork blob uploads. A complete Git bundle preserves the local commits.
+
+The public Sites deployment also remains pending. Its credential handoff was
+rejected because sandbox approval requests are disabled in this session.
+No live public game URL is claimed.
+
+REMAINING
+The roadmap lists incomplete systems and public-release gates. This build is
+playable, but it does not yet match every historical Habbo/Coke Music feature.
+Accounts, operational moderation, load/security testing and a scalable shared
+backend remain necessary before an unrestricted social-world launch.

@@ -13,3 +13,13 @@ test('Uno WebView bridge converts DOM IDs and preserves dispatch return values',
   assert.equal(context.window.AfterhoursUno.prepareWebView(),true);
   assert.equal(calls.length,2);assert.equal(calls[0][0],123);
 });
+test('Uno bridge handles exports registered after WebView construction',()=>{
+  const view={},context={window:{Microsoft:{UI:{Xaml:{Controls:{WebView:view}}}}}};
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'../uno/Afterhours.Uno/Platforms/WebAssembly/WasmScripts/AppManifest.js'),'utf8'),context);
+  assert.equal(context.window.AfterhoursUno.prepareWebView(),true);
+  let received;
+  view.unoExports={DispatchLoadEvent:id=>{received=id;}};
+  view.unoExports.DispatchLoadEvent('116178','about:blank');
+  assert.equal(received,116178);
+});

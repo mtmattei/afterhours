@@ -29,6 +29,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Platforms/WebAssembly/WasmScripts/AfterhoursInterop.js" />
     <PackageReference Include="System.Security.Cryptography.Pkcs" />
     <PackageReference Include="System.Security.Cryptography.Xml" />
   </ItemGroup>

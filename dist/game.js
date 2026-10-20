@@ -190,7 +190,7 @@
   const descriptions={
     sofa:'Two seats for long conversations.',seat:'A little corner for a quiet moment.',table:'A warm glow and a place to gather.',decks:'Open the studio, make a track, and take it to the stage.',
     speaker:'Play a song from your library in your room.',records:'Your collection of original music discs.',plant:'A little green. Water it and watch it glow.',lamp:'Switch the light on or off. Set the mood.',
-    jukebox:'Build a room playlist from your own songs.',vending:'Walk over, grab a soda, and enjoy it. Refills cost 2 credits.',portal:'Link this portal to one of your rooms.',dice:'Roll a six-sided die for your own room games.',notice:'Leave a note for your room.',bowl:'Feed and care for your companion.',gift:'Wrap an owned piece with a personal note. Open it later or gift it to a connected player.'
+    jukebox:'Build a room playlist from your own songs.',vending:'Walk over, grab a soda, and enjoy it. Refills cost 2 credits.',portal:'Link this portal to one of your rooms.',dice:'Roll a six-sided die for your own room games.',notice:'Leave a note for your room.',bowl:'Feed and care for your companion.',gift:'Wrap an owned piece with a personal note, then open it to reveal the surprise.'
   };
   function itemDetails(type,id){
     const item=game.state.items.find(i=>i.id===id),c=Furniture.catalog[type];
@@ -433,7 +433,16 @@
       carried={kind:'soda',until:Date.now()+60000};toast('A cold soda. Click Drink to enjoy it.');get('drinkButton').hidden=false;
     });
     if(item.type==='plant')use('Water the palm',()=>{act('itemAction',{id:item.id,action:'water'},'A little care goes a long way.');});
-    if(item.type==='dice')use('Roll the dice',()=>{const out=act('itemAction',{id:item.id,action:'roll'});if(out.ok){player.bubble='Rolled a '+out.result;player.until=Date.now()+5000;message('system',player.name+' rolled '+out.result);runRules('dice',String(out.result));}});
+    if(item.type==='dice')use('Roll the dice',async()=>{
+      let value;
+      if(window.AfterhoursOnline?.connected()){
+        try{value=await window.AfterhoursOnline.rollDice(item.id);}catch{return;}
+      }else{
+        const out=act('itemAction',{id:item.id,action:'roll'});if(!out.ok)return;
+        value=out.result;message('system',player.name+' rolled '+value);
+      }
+      player.bubble='Rolled a '+value;player.until=Date.now()+5000;runRules('dice',String(value));
+    });
     if(item.type==='notice')use('Read / leave a note',notesPanel);
     if(item.type==='bowl')use('Care for companion',petPanel);
     if(item.type==='portal'){

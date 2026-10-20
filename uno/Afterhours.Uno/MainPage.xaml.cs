@@ -4,7 +4,7 @@ public sealed partial class MainPage : Page
 {
     public MainPage()
     {
-        global::Uno.Foundation.WebAssemblyRuntime.InvokeJS("window.AfterhoursUno.prepareWebView()");
+        global::Uno.Foundation.WebAssemblyRuntime.InvokeJS("window.AfterhoursUno.prepareWebView() ? 'true' : 'false'");
         this.InitializeComponent();
         Loaded += async (_, _) => await OpenGameAsync();
     }
@@ -22,7 +22,7 @@ public sealed partial class MainPage : Page
             // Normalize that boundary in our version-scoped JS compatibility hook.
             for (var attempt = 0; attempt < 200; attempt++)
             {
-                if (global::Uno.Foundation.WebAssemblyRuntime.InvokeJS("window.AfterhoursUno.prepareWebView()") == "true")
+                if (global::Uno.Foundation.WebAssemblyRuntime.InvokeJS("window.AfterhoursUno.prepareWebView() ? 'true' : 'false'") == "true")
                     break;
                 await Task.Delay(10);
             }

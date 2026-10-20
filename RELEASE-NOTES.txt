@@ -12,21 +12,27 @@ SHARED WORLD
 Real guest presence, movement/posture, seat reservations, nearby chat, shouting,
 private whispers, friend requests, doorbell/host controls, music queues,
 shared playback timestamps, votes and two-party furniture trading.
+Dice rolls use one server result for the object, chat and avatar bubble.
 
 UNO PLATFORM
 A real Uno Platform / WinUI .NET 10 Browser WebAssembly app hosts the canvas
 game through WebView2. The Release publish completed locally. A compatibility
 hook normalizes DOM IDs at Uno 6.7.135's .NET 10 WebView callback boundary.
+It is packaged as its own embedded script, separate from Uno's generated manifest.
 The renderer is still JavaScript; this is not a complete native XAML rewrite.
 
 VALIDATION
 Game/model/database tests cover migration, ownership, purchases, duplicate
 rewards, gifts, blueprints, pets, movement, seating, private chat, trades,
 room doors, stage rewards, request limits and concurrent database writes.
+All 33 test cases pass, including 19 movement/seating checks grouped into two
+cases (50 individual checks total). The publish verifier checks the compiled
+runtime, the embedded compatibility script and all 22 current game files.
 Browser checks observed chat progression, song saving/playback, stage rewards,
 pet adoption/training, furniture purchase/placement, room creation/lighting,
 arcade completion/rewards, real two-browser chat/presence and restored identity.
-The compiled Uno shell loads the playable game and its studio.
+The compiled Uno shell loads the playable game and its studio with no console
+errors during the final startup and interaction check.
 
 PUBLICATION
 All source and original art are committed locally for:
@@ -35,6 +41,7 @@ https://github.com/mtmattei/afterhours
 Only the initial README reached GitHub. The full push is pending: the Windows
 credential helper failed, and automatic approval review could not process the
 large artwork blob uploads. A complete Git bundle preserves the local commits.
+The latest GitHub CLI status still reports an invalid account token.
 
 The public Sites deployment also remains pending. Its credential handoff was
 rejected because sandbox approval requests are disabled in this session.

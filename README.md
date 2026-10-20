@@ -59,6 +59,11 @@ The build copies the game into Uno's web assets and publishes the application
 to `release/uno`. Serve that directory over HTTP; WebAssembly does not run from
 a `file:` URL. `npm run start:uno` serves it with the local shared-world API.
 
+The build also verifies the compiled runtime, the WebView compatibility script,
+and every bundled game file. To create a portable ZIP after publishing, run
+`python scripts/package-wasm.py` (Python 3 required for packaging).
+The ZIP includes `PLAY.txt` and a Node launcher; players do not need .NET.
+
 On this Windows build host, MSBuild's separate task host cannot connect. The
 build script offers `--in-process` to run the same packaged tasks inside
 MSBuild. It preserves linking, trimming, resources and native compilation.

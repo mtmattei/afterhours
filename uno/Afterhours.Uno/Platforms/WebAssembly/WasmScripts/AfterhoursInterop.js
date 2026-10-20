@@ -1,4 +1,3 @@
-var UnoAppManifest = { displayName: 'Afterhours' };
 window.AfterhoursUno = {
   prepareWebView() {
     const view = window.Microsoft?.UI?.Xaml?.Controls?.WebView;

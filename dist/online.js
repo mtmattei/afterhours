@@ -238,6 +238,7 @@
   const api={
     connected:()=>online,remoteRoom:()=>remote,peers:()=>state?.peers||[],panel,renderFriends,stagePanel,queueSong,
     visitOwnRoom:id=>joinRoom('home:'+state.self.id+':'+id),
+    rollDice:id=>send('command',{type:'itemAction',payload:{id,action:'roll'}}).then(out=>out.result),
     chat:(text,mode,to)=>{if(online&&!(mode==='whisper'&&!state.peers.some(p=>p.id===to)))send('chat',{text,mode,to}).catch(()=>{});},
     saveLayout:()=>{if(online&&!applying&&!remote)send('layout',{room:W.getScene().activeRoomId,items:W.getScene().decor.map(i=>({id:i.id,x:i.x,y:i.y,rot:i.rot,placed:i.placed,state:i.state,destination:i.destination}))}).catch(()=>{});},
     arcadeStart:(game,id)=>{if(online)send('arcadeStart',{game,id}).catch(()=>{});},

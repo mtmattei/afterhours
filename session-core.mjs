@@ -123,7 +123,12 @@ function applyAction(db,user,type,p={},now=Date.now()){
       if(!allowed.includes(p.type))throw Error('This action is not available here.');
       if(p.type==='buy'&&p.payload?.id&&Object.values(db.users).some(u=>u.game.items.some(i=>i.id===p.payload.id)))throw Error('That item identifier is already in use.');
       if(p.type==='restoreBlueprint'&&Object.values(db.trades).some(t=>t.participants.includes(user.id)&&['pending','open'].includes(t.status)))throw Error('Finish your trade before restoring a blueprint.');
-      result=model(user).dispatch(p.type,p.payload||{},now);break;
+      result=model(user).dispatch(p.type,p.payload||{},now);
+      if(p.type==='itemAction'&&p.payload?.action==='roll'){
+        if(now-(user.lastDice||0)<1000)throw Error('Wait a moment before rolling again.');
+        user.lastDice=now;user.pose.bubble={text:'Rolled a '+result,until:now+5000};
+        chat(db,user.room,'system',user.game.profile.name+' rolled '+result);
+      }break;
     }
     case 'arcadeStart':{
       if(!['tiles','snow','quiz'].includes(p.game)||typeof p.id!=='string')throw Error('Unknown arcade game.');

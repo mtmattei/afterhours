@@ -2,6 +2,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialWorld,createGuest,authenticate,action,snapshot,tick} from '../session-core.mjs';
 const setup=async()=>{const db=initialWorld(),a=await createGuest(db,{name:'Alice'}),b=await createGuest(db,{name:'Bob'});return {db,a:await authenticate(db,a.token),b:await authenticate(db,b.token)};};
+test('shared dice return the same server result displayed to both players',async()=>{
+ const {db,a,b}=await setup(),now=Date.now();
+ action(db,a,'command',{type:'buy',payload:{type:'dice',id:'shared-die'}},now);
+ action(db,a,'layout',{room:'home',items:[{id:'shared-die',x:7,y:7,placed:true}]},now);
+ action(db,a,'joinRoom',{key:'home:'+a.id+':home'},now);
+ action(db,b,'joinRoom',{key:'home:'+a.id+':home'},now);
+ const value=action(db,a,'command',{type:'itemAction',payload:{id:'shared-die',action:'roll'}},now);
+ assert.ok(value>=1&&value<=6);assert.equal(db.users[a.id].game.items.find(i=>i.id==='shared-die').value,value);
+ assert.ok(snapshot(db,b).chats.some(m=>m.text==='Alice rolled '+value));
+ assert.throws(()=>action(db,a,'command',{type:'itemAction',payload:{id:'shared-die',action:'roll'}},now+100));
+ assert.equal(db.users[a.id].game.items.find(i=>i.id==='shared-die').value,value);
+});
 test('session credentials are private and unguessable',async()=>{const {db,a,b}=await setup();assert.notEqual(a.id,b.id);assert.throws(()=>action(db,a,'joinRoom',{key:'bogus'}));const s=snapshot(db,a);assert.equal('auth' in s,false);assert.equal('token' in s.self,false);});
 test('one avatar per seat and invalid claims are atomic',async()=>{const {db,a,b}=await setup();action(db,a,'seat',{id:'lounge-0-0',point:[200,400]});assert.throws(()=>action(db,b,'seat',{id:'lounge-0-0',point:[200,400]}));assert.throws(()=>action(db,a,'seat',{id:'lounge-0-1',point:[NaN,400]}));assert.equal(db.rooms['public:0'].seats['lounge-0-0'],a.id);assert.equal(db.rooms['public:0'].seats['lounge-0-1'],undefined);});
 test('whispers are visible only to sender and recipient',async()=>{const {db,a,b}=await setup(),c=await createGuest(db,{name:'Cara'}),third=await authenticate(db,c.token);action(db,a,'chat',{text:'private hello',mode:'whisper',to:b.id});assert.ok(snapshot(db,b).chats.some(m=>m.text==='private hello'));assert.equal(snapshot(db,third).chats.some(m=>m.text==='private hello'),false);});

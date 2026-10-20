@@ -18,6 +18,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          ref: 7cd2f79771bd5e59d885224be9fc050998ecc89c
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -57,7 +58,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      RELEASE_COMMIT: ${{ github.sha }}
+      RELEASE_COMMIT: 7cd2f79771bd5e59d885224be9fc050998ecc89c
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -83,7 +84,7 @@ jobs:
       - name: Upload and verify downloads before publication
         run: |
           gh release upload v0.5.0 release/Afterhours.html release/afterhours-uno-wasm.zip release/SHA256SUMS.txt --clobber
-          gh api "repos/$GH_REPO/releases/tags/v0.5.0" > uploaded-release.json
+          gh api "repos/$GH_REPO/releases/418770675" > uploaded-release.json
           python3 - <<'PY'
           import hashlib, json, pathlib
           release = json.load(open('uploaded-release.json'))

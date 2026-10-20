@@ -28,7 +28,7 @@ Final isolated remote test: five clients, 100 saved characters, 60 seconds,
 Median/p95 latency: 817/1193 ms. The full 387-request suite used 1,161 D1 row
 writes; purchases, seats, whispers, friends, trades, replay rejection and music
 rewards passed. Full admission and forced daily-limit checks passed without
-lost progress. Fifty automated Node cases pass. This is a short bounded test,
+lost progress. Fifty-one automated Node cases pass. This is a short bounded test,
 not proof of viral or all-day capacity. Details: PLAYTEST-SETUP.md and
 validation/free-playtest-2026-10-20.json.
 

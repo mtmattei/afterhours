@@ -51,7 +51,7 @@ metrics also showed no errors. Provider charts lag and these are short-run
 samples, not a sustained capacity guarantee. A dropped local test connection
 interrupted an earlier run; the final run completed without resets.
 
-Fifty automated Node test cases pass. Cancellation, mismatched-account and
+Fifty-one automated Node test cases pass. Cancellation, mismatched-account and
 transient-failure paths have automated coverage; live cancellation and different
 physical devices still need human acceptance. Test credentials and database
 snapshots remain private and ignored by Git. Disposable cloud test resources

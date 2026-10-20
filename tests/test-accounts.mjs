@@ -73,6 +73,19 @@ test('link callback rejects an unexpected account without moving the remembered 
   await assert.rejects(account.finish('?code=one-use'), /did not match/);
   assert.equal(store.getItem('afterhours-account-id'), id);
 });
+
+test('cancelled Google linking preserves the guest and never exchanges a session or creates a replacement',async()=>{
+  const store=memory();store.setItem('afterhours-account-id',id);
+  store.setItem('afterhours-account-flow',JSON.stringify({mode:'link',id}));
+  let exchanges=0,creations=0;
+  const account=createAccounts({getSession:async()=>({data:{session:session()}}),
+    exchangeCodeForSession:async()=>{exchanges++;throw Error('must not exchange');},
+    signInAnonymously:async()=>{creations++;throw Error('must not replace');}},store);
+  await assert.rejects(account.finish('?error=access_denied'),/cancelled/);
+  assert.equal(store.getItem('afterhours-account-id'),id);
+  assert.equal(await account.enter(),'access');
+  assert.equal(exchanges,0);assert.equal(creations,0);
+});
 test('simultaneous first joins share one guest through the browser entry lock',async()=>{
   const store=memory();let value=null,created=0,queue=Promise.resolve();
   const auth={

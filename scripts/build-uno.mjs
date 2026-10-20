@@ -1,3 +1,4 @@
+import './build-client.mjs';
 import {cp,mkdir} from 'node:fs/promises';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';

@@ -2,13 +2,18 @@
   'use strict';
   const W=window.AfterhoursWorld,G=AfterhoursGame,base=window.AFTERHOURS_API||(location.protocol.startsWith('http')?location.origin:'');
   const get=id=>document.getElementById(id),h=W.h;
-  let ready=false,online=false,token='',state=null,solo=null,remote=null,applying=false,joining=false,lastPose=0,lastPoll=0,polling=false,lastGameRevision=-1;
+  let ready=false,online=false,token='',state=null,solo=null,remote=null,applying=false,joining=false,lastPose=0,lastPoll=0,polling=false,lastGameRevision=-1,managed=false,account=null,retryAfter=0;
   let requestChain=Promise.resolve(),pending=0,lastChatIds=new Set(),seenNotifications=new Set(),rendered=new Map(),extrasTimer=null,lastTradeStatus='',lastStage='',listen=false,networkErrors=0;
   let rosterSignature='',friendsSignature='',stageSignature='',poseSignature='';
   const sharedMusic=new AfterhoursMusic(),originalDispatch=W.game.dispatch.bind(W.game),originalSave=W.game.save.bind(W.game),oldEnter=enterRoom,oldSeat=useSeat,oldStand=standUp,oldEditing=startEditing;
   async function request(path,body,auth=true){
+    if(auth&&Date.now()<retryAfter)throw Error('The playtest is taking a short pause. Your saved character is safe; retry in a minute.');
+    if(auth&&managed)token=await window.AfterhoursAccount.token();
     const response=await fetch(base+path,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json',...(auth&&token?{Authorization:'Bearer '+token}:{})},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(15000)});
-    const json=await response.json();if(!response.ok)throw Error(json.error||'The shared world could not be reached.');return json;
+    const json=await response.json();if(!response.ok){
+      if(response.status===429||response.status===503){retryAfter=Date.now()+60000;get('connectionLabel').textContent='PLAYTEST PAUSED';}
+      throw Object.assign(Error(json.error||'The shared world could not be reached.'),{status:response.status});
+    }return json;
   }
   function send(type,payload={},quiet=false){
     pending++;
@@ -55,13 +60,20 @@
     if(get('sharedGuestList')&&rosterKey!==rosterSignature)renderGuests();
     rosterSignature=rosterKey;friendsSignature=friendsKey;stageSignature=stageKey;
   }
-  async function connect(name){
+  async function connect(name,captchaToken){
     try{
-      token=localStorage.getItem('afterhours-online-token')||'';
       let next;
-      if(token){try{next=await request('/api/state');}catch{token='';}}
-      if(!token){
-        const out=await request('/api/guest',{name,avatar:W.getScene().spriteIndex},false);token=out.token;next=out.snapshot;localStorage.setItem('afterhours-online-token',token);
+      if(managed){
+        const accounts=window.AfterhoursAccount;
+        if(!accounts)throw Error('The host is still connecting account recovery. Please try again later.');
+        await accounts.enter(captchaToken);
+        const out=await request('/api/guest',{name,avatar:W.getScene().spriteIndex});
+        next=out.snapshot;account=out.account;
+      }else{
+        const out=await AfterhoursSession.resumeOrCreate(localStorage,async(path,body,saved)=>{
+          token=saved;return request(path,body,!!saved);
+        },name,W.getScene().spriteIndex);
+        token=out.token;next=out.snapshot;
       }
       W.saveWorld();solo=G.clone(W.game.state);online=true;lastGameRevision=-1;apply(next);renderRoom();W.close();W.toast('You joined the shared world.');
     }catch(e){const error=get('panelError');if(error){error.hidden=false;error.textContent=e.message;}else W.toast(e.message);}
@@ -80,10 +92,32 @@
     }
     if(!online){
       W.panel('See you after hours','JOIN THE SHARED WORLD',`<p>Meet real players, share a room, hear the same performance, and trade furniture. Your online character and your solo world have separate progress.</p><form id="joinWorldForm"><label class="form-field">Your name<input id="onlineName" maxlength="20" value="${h(W.game.state.profile.name)}"></label><button class="primary">${localStorage.getItem('afterhours-online-token')?'Continue online character':'Create online character'}</button></form><p class="small-note">A guest character is remembered in this browser. Keep this browser’s data to retain access. No email or password required.</p>`);
-      get('joinWorldForm').onsubmit=e=>{e.preventDefault();get('joinWorldForm').querySelector('button').disabled=true;connect(get('onlineName').value).finally(()=>{const b=get('joinWorldForm')?.querySelector('button');if(b)b.disabled=false;});};return;
+      if(managed){
+        get('joinWorldForm').querySelector('button').textContent=window.AfterhoursAccount?.remembered()?'Continue my character':'Play as a guest';
+        get('joinWorldForm').insertAdjacentHTML('beforeend','<div id="accountChallenge"></div>');
+        get('joinWorldForm').nextElementSibling.innerHTML='Your progress saves to the shared world. Link Google after joining to recover it on another device. An unlinked guest depends on this browser.<br><button class="soft-button" id="restoreAccount">Restore account with Google</button>';
+        W.button('restoreAccount',restorePanel);
+      }
+      get('joinWorldForm').onsubmit=async e=>{
+        e.preventDefault();const button=get('joinWorldForm').querySelector('button');button.disabled=true;
+        try{
+          let captcha;
+          if(managed&&!window.AfterhoursAccount?.remembered())captcha=await window.AfterhoursAccount.challenge(get('accountChallenge'));
+          await connect(get('onlineName').value,captcha);
+        }catch(error){W.toast(error.message);}finally{button.disabled=false;}
+      };return;
     }
     W.panel('The world is better together','SHARED WORLD',`<div class="session-banner">Connected as <b>${h(state.self.name)}</b> · ${state.peers.length} other players in this room</div><div class="button-row"><button id="sharedRooms" class="primary">Shared rooms</button><button id="sharedStageOpen" class="soft-button">Music stage</button><button id="sharedFriendsOpen" class="soft-button">Friends & requests</button></div><div id="sharedGuestList"></div><div id="doorRequests"></div><div id="tradeInvites"></div><button class="soft-button" id="leaveOnline">Return to solo world</button>`);
+    if(managed){
+      get('sharedGuestList').insertAdjacentHTML('beforebegin',`<div class="session-banner account-status"><b>${account?.anonymous?'Keep your place.':'Your character is linked.'}</b><p>${account?.anonymous?'Link Google to bring your rooms, tracks, and furniture with you on another device.':'Sign in with the same Google account to recover your saved progress.'}</p>${account?.anonymous?'<button class="primary" id="linkAccount">Link Google account</button>':''}</div>`);
+      W.button('linkAccount',()=>window.AfterhoursAccount.link().catch(error=>W.toast(error.message)));
+    }
     W.button('sharedRooms',roomDirectory);W.button('sharedStageOpen',stagePanel);W.button('sharedFriendsOpen',friendsPanel);W.button('leaveOnline',disconnect);renderGuests();
+  }
+  function restorePanel(){
+    W.panel('Welcome back.','RESTORE YOUR CHARACTER','<p>Sign in with the Google account you linked before. This opens that account’s saved character. Guest progress from another character is not merged.</p><button id="confirmRestore" class="primary">Continue with Google</button><button id="cancelRestore" class="soft-button">Back</button>');
+    W.button('cancelRestore',panel);
+    W.button('confirmRestore',()=>window.AfterhoursAccount.restore().catch(error=>W.toast(error.message)));
   }
   function renderGuests(){
     const host=get('sharedGuestList');if(!host||!state)return;
@@ -243,7 +277,7 @@
     saveLayout:()=>{if(online&&!applying&&!remote)send('layout',{room:W.getScene().activeRoomId,items:W.getScene().decor.map(i=>({id:i.id,x:i.x,y:i.y,rot:i.rot,placed:i.placed,state:i.state,destination:i.destination}))}).catch(()=>{});},
     arcadeStart:(game,id)=>{if(online)send('arcadeStart',{game,id}).catch(()=>{});},
     update(dt,t){
-      if(!online)return;
+      if(!online||Date.now()<retryAfter||document.hidden)return;
       for(const peer of state?.peers||[]){let p=rendered.get(peer.id);if(!p){p={x:peer.pose.x,y:peer.pose.y};rendered.set(peer.id,p);}const k=1-Math.exp(-dt*12);p.x+=(peer.pose.x-p.x)*k;p.y+=(peer.pose.y-p.y)*k;}
       if(t-lastPose>250&&!pending&&!joining){
         const scene=W.getScene(),pose={x:W.player.x,y:W.player.y,back:W.walker.back,flip:W.walker.flip,dancing,avatar:scene.spriteIndex,seated:scene.seating.mode==='sitting'},key=JSON.stringify(pose);
@@ -258,6 +292,10 @@
   };
   window.AfterhoursOnline=api;
   const label=get('connectionLabel');label.style.cursor='pointer';label.setAttribute('role','button');label.tabIndex=0;label.onclick=panel;label.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();panel();}};
-  async function health(){if(!base)return;try{const out=await request('/api/health',undefined,false);ready=out.ok===true;if(ready&&!online)label.textContent='JOIN SHARED WORLD';}catch{ready=false;}}
-  health();
+  async function health(){if(!base)return;try{const out=await request('/api/health',undefined,false);ready=out.ok===true;managed=out.accounts==='supabase';if(ready&&!online)label.textContent='JOIN SHARED WORLD';}catch{ready=false;}}
+  health().then(()=>{
+    if(ready&&managed&&localStorage.getItem('afterhours-account-resume')){
+      localStorage.removeItem('afterhours-account-resume');connect(W.game.state.profile.name);
+    }
+  });
 })();

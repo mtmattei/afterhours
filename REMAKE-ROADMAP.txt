@@ -48,7 +48,9 @@ SHARED   Nearby speech, whole-room shouting, private recipient-filtered whispers
 SHARED   Block and stored player reports; owner room removal and bans.
 PARTIAL  Named resident NPCs provide solo company. They are explicitly identified
          separately from connected people.
-PARTIAL  Guest access persists in one browser. No recovery or cross-device login.
+PARTIAL  Managed guest identities and Google linking/recovery implemented for
+         the limited playtest. Live OAuth/CAPTCHA and cross-device acceptance
+         tests require provider setup. Legacy browser guests remain separate.
 PARTIAL  Room event name/countdown; no global event calendar or invites.
 NEXT     Direct-message inbox, groups/clubs, membership/roles, shared group rooms,
          moderation dashboard, report triage, appeals and account deletion.

@@ -1,3 +1,20 @@
+UNRELEASED — FREE PLAYTEST PREPARATION
+
+Guest-first Supabase authentication with Google linking/recovery; signed server
+identity verification; D1 saves retain the same character after account linking.
+The client never replaces a remembered guest after a connection failure.
+Five connected players, 100 characters, a 1.7 MB world and 12,000 API requests
+per UTC day bound the initial free test. Exhaustion pauses access, keeping saves.
+A preparation script packages the compiled Uno app and API for Cloudflare;
+PLAYTEST-SETUP.md covers configuration, deployment and private backup rehearsal.
+
+Validation: 43 Node test cases, including signed identity/expiry checks,
+account-link continuity, foreign-account isolation, transient failure recovery,
+request limits and concurrent SQLite transactions. Account screens were checked
+in a local browser fixture. Actual Google OAuth, CAPTCHA, cross-device recovery,
+provider quotas and backup restoration still require the live free accounts.
+No public playtest URL exists yet. The published v0.5.0 assets below are unchanged.
+
 AFTERHOURS 0.5 — PLAYABLE DEVELOPMENT BUILD
 20 October 2026
 
@@ -41,6 +58,10 @@ https://github.com/mtmattei/afterhours
 GitHub main was verified against local commit 5bec9ff: all 95 tracked files and
 the complete commit history matched. This update also restores the source
 AppManifest.js required by Uno.Resizetizer for a clean build on GitHub Actions.
+
+Published preview: https://github.com/mtmattei/afterhours/releases/tag/v0.5.0
+Both downloads and SHA256SUMS.txt were verified before publication. The owner-
+approved temporary publishing workflow was removed after success.
 
 Development downloads:
 - Afterhours.html: standalone solo game; open it in a desktop browser.

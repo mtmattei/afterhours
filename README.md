@@ -12,6 +12,7 @@ Original generated artwork and synthesized music; no original game assets are in
 Install Node.js 22 or newer, then:
 
 ```sh
+npm ci
 npm start
 ```
 
@@ -74,8 +75,8 @@ This compatibility option is pinned to the checked-in SDK/package versions.
 `server.mjs` is the dependency-free local Node service. `session-core.mjs`
 contains ownership, wallet, trade, seats, friendship and performance rules.
 `service/` builds a portable Worker with a D1 migration and atomic revision
-checks. This is a bounded playtest backend, capped at 100 guest characters
-and a 1.7 MB world snapshot. It needs room-level storage and operational
+checks. This is a bounded playtest backend, capped at five connected players,
+100 characters, 12,000 API requests per UTC day and a 1.7 MB world snapshot. It needs room-level storage and operational
 moderation before a large public launch.
 
 ```sh
@@ -83,15 +84,19 @@ npm test
 npm run build:service
 ```
 
-The public Uno client and shared service are separate deployments. Apply the
-service's migration, set its `FRONTEND_ORIGIN` to the verified deployed client
-origin, and set `window.AFTERHOURS_API` in the client's `game/runtime-config.js`
-to the verified service origin. Do not expose guest tokens or world data.
+The free playtest setup serves the compiled Uno app and API together on
+Cloudflare Workers, with D1 saves and Supabase guest accounts. Guests can link
+Google and restore the same character on another device. A failed connection
+never silently replaces a remembered character.
 
-No public deployment is claimed by this repository. The prepared Sites
-publication was blocked by this session's publishing approval configuration.
-The user's requested public release remains pending completion of the roadmap
-and release gates.
+Follow [PLAYTEST-SETUP.md](PLAYTEST-SETUP.md) for the free accounts, build,
+configuration, deployment, backup rehearsal and supervised acceptance test.
+Google/CAPTCHA integration needs live provider configuration before it can be
+verified end to end. No public multiplayer deployment is claimed.
+
+[Download v0.5.0](https://github.com/mtmattei/afterhours/releases/tag/v0.5.0) for
+the standalone HTML and compiled Uno ZIP. That published preview predates the
+managed-account work now on main; its contents have not been silently replaced.
 
 ## Layout
 
@@ -108,5 +113,5 @@ and release gates.
 
 Full avatar customization, four-facing/stacked/wall furniture, beds and pools,
 groups, direct messages, marketplace, collaborative building/music, complete
-classic minigames, recoverable cross-device accounts, moderation operations,
+classic minigames, live account-recovery acceptance testing, moderation operations,
 accessibility audit, load testing, security review and historical parity audit.

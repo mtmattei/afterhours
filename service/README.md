@@ -10,9 +10,11 @@ configuration must point to this service's verified HTTPS origin.
 
 This bounded playtest backend stores one world snapshot with optimistic
 revision checks. Trades and purchases commit atomically; failed writes leave
-all ownership unchanged. It caps guest accounts at 100 and world storage at
-1.7 MB. Room-level persistence, moderation operations and recoverable accounts
-are required before an unrestricted launch.
+all ownership unchanged. It caps guest accounts at 100, connected players at five, daily API
+requests at 12,000, and world storage at 1.7 MB. Room-level persistence, moderation operations and live account-recovery
+acceptance tests are required before an unrestricted launch.
 
-No production deployment has been completed. The Sites publishing helper was
-blocked by the current session's approval configuration.
+Supabase identities are verified with their project's public signing keys.
+Google linking retains the same identity-to-character mapping; no client ID
+or wallet is trusted. See ../PLAYTEST-SETUP.md for the free managed setup.
+No production deployment has been completed.

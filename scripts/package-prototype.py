@@ -31,8 +31,8 @@ for(const name of ['avatars.png','side-b.png','room-atlas.png']){
 }
 </script>'''
 html = html.replace('<script src="movement.js">', boot+'<script src="movement.js">')
-for name in ['movement.js','furniture.js','seating.js','app.js','game-core.js','music.js','arcade.js','game.js','runtime-config.js','online.js']:
-    script = (dist/name).read_text(encoding='utf-8')
+for name in ['movement.js','furniture.js','seating.js','app.js','game-core.js','music.js','arcade.js','game.js','runtime-config.js','accounts.js','online-session.js','online.js']:
+    script = (dist/name).read_text(encoding='utf-8').replace('</script', '<\\/script')
     for asset in assets:
         script = script.replace("'assets/"+asset+"'", "window.ART['"+asset+"']")
     html = html.replace('<script src="'+name+'"></script>', '<script>'+script+'</script>')

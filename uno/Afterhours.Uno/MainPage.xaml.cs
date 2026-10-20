@@ -17,6 +17,14 @@ public sealed partial class MainPage : Page
         try
         {
             await GameView.EnsureCoreWebView2Async();
+            // Uno 6.7 passes iframe IDs as strings to .NET 10's integer export.
+            // Normalize that boundary in our version-scoped JS compatibility hook.
+            for (var attempt = 0; attempt < 200; attempt++)
+            {
+                if (global::Uno.Foundation.WebAssemblyRuntime.InvokeJS("window.AfterhoursUno.prepareWebView()") == "true")
+                    break;
+                await Task.Delay(10);
+            }
             GameView.NavigationCompleted -= GameView_NavigationCompleted;
             GameView.NavigationCompleted += GameView_NavigationCompleted;
             var address = global::Uno.Foundation.WebAssemblyRuntime.InvokeJS("new URL('game/index.html', document.baseURI).href");

@@ -34,21 +34,31 @@ arcade completion/rewards, real two-browser chat/presence and restored identity.
 The compiled Uno shell loads the playable game and its studio with no console
 errors during the final startup and interaction check.
 
-PUBLICATION
-All source and original art are committed locally for:
+SOURCE AND DOWNLOADS
+The complete source, original artwork, tests and Uno application are on:
 https://github.com/mtmattei/afterhours
 
-Only the initial README reached GitHub. The full push is pending: the Windows
-credential helper failed, and automatic approval review could not process the
-large artwork blob uploads. A complete Git bundle preserves the local commits.
-The latest GitHub CLI status still reports an invalid account token.
+GitHub main was verified against local commit 5bec9ff: all 95 tracked files and
+the complete commit history matched. This update also restores the source
+AppManifest.js required by Uno.Resizetizer for a clean build on GitHub Actions.
 
-The public Sites deployment also remains pending. Its credential handoff was
-rejected because sandbox approval requests are disabled in this session.
-No live public game URL is claimed.
+Development downloads:
+- Afterhours.html: standalone solo game; open it in a desktop browser.
+- afterhours-uno-wasm.zip: compiled Uno app and local shared-world launcher.
+  Extract it, follow PLAY.txt, and run node Launch-Afterhours.mjs (Node.js 22+).
+  Players do not need .NET to run the compiled download.
+
+These are playable development downloads. A GitHub Release is not a hosted
+public multiplayer service. The live public game has not been deployed.
 
 REMAINING
 The roadmap lists incomplete systems and public-release gates. This build is
 playable, but it does not yet match every historical Habbo/Coke Music feature.
 Accounts, operational moderation, load/security testing and a scalable shared
 backend remain necessary before an unrestricted social-world launch.
+
+PUBLIC-LAUNCH DIRECTION
+Visitors should be able to start as guests, then link an account to recover
+the same character on another device. Durable player saves, scalable room
+services, backup/restore checks, abuse controls and tested capacity are required
+before promoting the live game on social media.

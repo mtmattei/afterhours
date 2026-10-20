@@ -5,8 +5,9 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (Movement, Furniture) {
   const same = (a, b) => Math.hypot(a.x - b.x, a.y - b.y) < .001;
   function slots(item) {
-    if (item.placed === false || !['sofa', 'seat'].includes(item.type)) return [];
-    const count = item.type === 'sofa' ? 2 : 1, { w, d } = Furniture.footprint(item);
+    const seats = Furniture.catalog[item.type]?.seats;
+    if (item.placed === false || !seats?.length) return [];
+    const count = seats.length, { w, d } = Furniture.footprint(item);
     return Array.from({ length: count }, (_, index) => ({
       id: `${item.id}:${index}`, itemId: item.id, index,
       // Approach the open front edge, never through the back or arm of the sofa.
@@ -14,8 +15,7 @@
         ? { x: item.x + w + .5, y: item.y + index + .5 }
         : { x: item.x + index + .5, y: item.y + d + .5 }],
       flip: !item.rot,
-      anchor: item.type === 'sofa'
-        ? (index ? [.61, .56] : [.35, .43]) : [.53, .44]
+      anchor: seats[index]
     }));
   }
   function plan(offers, actor, options, occupied = new Set()) {

@@ -44,7 +44,7 @@
     const el=get('panelError');if(el){el.textContent=text;el.hidden=false;}else toast(text);
   }
   function panel(title,kicker,body,wide=false){
-    screen=title;get('modal').classList.toggle('wide',wide);
+    screen=title;get('modal').classList.remove('catalog-modal');get('modal').classList.toggle('wide',wide);
     modal(`<div class="eyebrow">${h(kicker)}</div><h2>${h(title)}</h2><p id="panelError" class="panel-error" role="alert" hidden></p>${body}`);
   }
   function close(){get('modal').close();}
@@ -78,13 +78,27 @@
   const questNav=document.createElement('button');questNav.className='nav';questNav.id='questsOpen';questNav.innerHTML='<svg><use href="#i-grid"/></svg>Journal <span id="questCount" class="reward-count" hidden></span>';nav.append(questNav);
   const arcadeNav=document.createElement('button');arcadeNav.className='nav';arcadeNav.id='arcadeOpen';arcadeNav.innerHTML='<svg><use href="#i-world"/></svg>Arcade';nav.append(arcadeNav);
   const dock=document.createElement('div');dock.className='game-dock';dock.innerHTML='<button id="stageOpen"><span>♫</span>Stage</button><button id="catalogOpen"><span>▧</span>Catalog</button><button id="myRoomsOpen"><span>⌂</span>My rooms</button><button id="petOpen"><span>♧</span>Companion</button><button id="roomTools"><span>⚙</span>Room tools</button>';
-  $('.action-bar').after(dock);
+  $('.action-bar').append(dock);
+  const quickShop=document.createElement('button');quickShop.className='top-tool';quickShop.id='quickCatalog';quickShop.textContent='▧ Furniture shop';$('.topbar .account').before(quickShop);button('quickCatalog',()=>catalog());
+  const musicToggle=document.createElement('button');musicToggle.className='top-tool';musicToggle.textContent='♫ Music';musicToggle.setAttribute('aria-expanded','false');quickShop.before(musicToggle);musicToggle.onclick=()=>{const open=document.body.classList.toggle('music-panel-open');musicToggle.setAttribute('aria-expanded',String(open));};
   const activity=document.createElement('div');activity.id='activityCard';activity.className='activity-card';activity.hidden=true;$('.scene-card').before(activity);
   button('dailyClaim',()=>{if(act('checkin',{},'35 credits and 15 XP. Welcome back.').ok)journal();});
   button('questsOpen',()=>journal());button('arcadeOpen',arcade);button('stageOpen',stagePanel);button('catalogOpen',()=>catalog());button('myRoomsOpen',()=>directory('mine'));button('petOpen',petPanel);button('roomTools',roomTools);
-  button('profile',profile);button('allRooms',()=>directory('all'));button('saveRoom',()=>{
+  button('profile',profile);button('allRooms',()=>openNavigator());button('saveRoom',()=>{
     act('favorite',{id:roomKey()});syncFavorite();
   });
+  function openNavigator(){if(window.AfterhoursOnline?.connected())window.AfterhoursOnline.directory();else directory('all');}
+  const journey=document.createElement('nav');journey.className='room-journey';journey.setAttribute('aria-label','Travel to another space');
+  journey.innerHTML=rooms.map((r,i)=>`<button class="travel-stop" data-travel="${i}"><span>${r.icon}</span><b>${h(r.title)}</b><small>${i===0?'Listening lounge':i===1?'Cafe & conversation':i===2?'Quiet company':'Above the city'}</small></button>`).join('')+'<button class="travel-home" id="travelHome"><span>⌂</span><b>My room</b></button><button class="travel-more" id="travelMore" aria-label="Explore all rooms">All rooms ↗</button>';
+  $('.scene-card').before(journey);
+  journey.querySelectorAll('[data-travel]').forEach(b=>b.onclick=()=>enterRoom(+b.dataset.travel));
+  button('travelHome',()=>window.AfterhoursOnline?.connected()?window.AfterhoursOnline.visitOwnRoom(activeRoomId):visitRoom(activeRoomId));button('travelMore',openNavigator);
+  const chatToggle=document.createElement('button');chatToggle.id='chatHistory';chatToggle.className='soft-button';chatToggle.textContent='Chat history';chatToggle.setAttribute('aria-expanded','false');
+  $('.action-bar').append(chatToggle);chatToggle.onclick=()=>{const open=document.body.classList.toggle('chat-history-open');chatToggle.setAttribute('aria-expanded',String(open));chatToggle.textContent=open?'Close history':'Chat history';};
+  const composer=$('.chat-footer');composer.classList.add('room-composer');$('.action-bar').before(composer);
+  $('.rail').querySelectorAll('button').forEach(b=>{if(!b.title)b.title=b.textContent.trim();if(!b.getAttribute('aria-label'))b.setAttribute('aria-label',b.title);});
+  let lastJourney='';
+  function updateJourney(){const key=roomKey();if(key===lastJourney)return;lastJourney=key;journey.querySelectorAll('[data-travel]').forEach(b=>{const active=!personal&&+b.dataset.travel===roomIndex;b.classList.toggle('selected',active);b.disabled=active;b.setAttribute('aria-current',active?'location':'false');});get('travelHome').classList.toggle('selected',personal&&!window.AfterhoursOnline?.remoteRoom());}
   function syncFavorite(){liked=game.state.favorites.includes(roomKey());get('likes').textContent=liked?'Saved':'Save';get('saveRoom').classList.toggle('is-saved',liked);}
   enterRoom=function(index,mine=false){
     pendingUse=null;if(personal)saveWorld();
@@ -150,7 +164,7 @@
     const s=game.state,entries=rooms.map((r,i)=>({key:'public:'+i,name:r.title,description:r.mood,id:i,kind:'public',icon:r.icon})).concat(s.rooms.map(r=>({key:'my:'+r.id,name:r.name,description:r.description,id:r.id,kind:'mine',icon:'⌂'})));
     let list=entries.filter(e=>(filter==='all'||filter==='mine'&&e.kind==='mine'||filter==='favorites'&&s.favorites.includes(e.key)||filter==='recent'&&s.history.includes(e.key))&&(e.name+' '+e.description).toLowerCase().includes(query.toLowerCase()));
     if(filter==='recent')list.sort((a,b)=>s.history.indexOf(a.key)-s.history.indexOf(b.key));
-    panel('Find your people','ROOM NAVIGATOR',topTabs([['all','All rooms'],['mine','My rooms'],['favorites','Favorites'],['recent','Recent']],filter)+`<input class="search-field" id="roomSearch" value="${h(query)}" placeholder="Search rooms…" aria-label="Search rooms"><div class="directory-list">${list.map(e=>`<button class="directory-room" data-key="${h(e.key)}"><span class="room-symbol">${e.icon}</span><span><b>${h(e.name)}</b><small>${h(e.description)}</small></span><em>${e.kind==='mine'?'YOURS':'PUBLIC'} ↗</em></button>`).join('')||'<p>No rooms match this search.</p>'}</div><button class="primary" id="newRoom">＋ Create a room</button>`);
+    panel('Find your people','ROOM NAVIGATOR',topTabs([['all','All rooms'],['mine','My rooms'],['favorites','Favorites'],['recent','Recent']],filter)+`<input class="search-field" id="roomSearch" value="${h(query)}" placeholder="Search rooms…" aria-label="Search rooms"><div class="directory-list destination-grid">${list.map(e=>`<button class="directory-room" data-key="${h(e.key)}"><span class="destination-art ${e.kind==='mine'?'home':'public-'+e.id}"></span><span><b>${h(e.name)}</b><small>${h(e.description)}</small></span><em>${e.kind==='mine'?'YOURS':'PUBLIC'} ↗</em></button>`).join('')||'<p>No rooms match this search.</p>'}</div><button class="primary" id="newRoom">＋ Create a room</button>`);
     buttons('[data-tab]',b=>directory(b.dataset.tab,query));
     get('roomSearch').oninput=e=>{const value=e.target.value,position=e.target.selectionStart;directory(filter,value);get('roomSearch').focus();get('roomSearch').setSelectionRange(position,position);};
     buttons('[data-key]',b=>{if(b.dataset.key.startsWith('my:'))visitRoom(b.dataset.key.slice(3));else{enterRoom(+b.dataset.key.slice(7));close();}});
@@ -160,30 +174,32 @@
     });
   }
   function artCard(type){
-    const c=Furniture.catalog[type],crop=c.cell<8?furnitureCrops[c.cell]:newCrops[c.cell-8],art=c.cell<8?furnitureImage:newArt;
-    const cv=document.createElement('canvas');cv.width=160;cv.height=125;cv.setAttribute('aria-hidden','true');
-    if(crop&&art.complete&&art.naturalWidth){const scale=Math.min(148/crop[2],115/crop[3]);cv.getContext('2d').drawImage(art,...crop,(160-crop[2]*scale)/2,120-crop[3]*scale,crop[2]*scale,crop[3]*scale);}
-    return cv;
+    const {crop,image:art}=furnitureArt(type),cv=document.createElement('canvas');cv.width=320;cv.height=250;cv.setAttribute('aria-hidden','true');
+    const paint=()=>{const scale=Math.min(288/crop[2],222/crop[3]);cv.getContext('2d').drawImage(art,...crop,(320-crop[2]*scale)/2,238-crop[3]*scale,crop[2]*scale,crop[3]*scale);};
+    if(art.complete&&art.naturalWidth)paint();else art.addEventListener('load',paint,{once:true});return cv;
   }
-  const category=type=>['sofa','seat','table'].includes(type)?'lounge':['decks','speaker','records','jukebox'].includes(type)?'music':['vending','portal','dice','notice','bowl','gift'].includes(type)?'interactive':'decor';
-  function catalog(tab='shop',filter='all',query=''){
-    panel('Make it yours','FURNITURE & COLLECTING',topTabs([['shop','Catalog'],['owned','Inventory'],['discs','Records']],tab)+
+  const category=type=>Furniture.catalog[type].category||(['sofa','seat','table'].includes(type)?'lounge':['decks','speaker','records','jukebox'].includes(type)?'music':['vending','portal','dice','notice','bowl','gift'].includes(type)?'interactive':'decor');
+  const collections=[['all','All collections','A room that feels like you'],['loft','Soft loft','Warm wood. Soft edges. Slow evenings.'],['diner','Midnight diner','Coffee and company, all night long.'],['studio','Sound studio','Find your sound. Make some noise.'],['arcade','Arcade nights','One more game before we go.'],['garden','Secret garden','Make a little room to breathe.'],['originals','Afterhours originals','The pieces that started the night.']];
+  function catalog(tab='shop',filter='all',query='',collection='all'){
+    const selected=collections.find(c=>c[0]===collection)||collections[0];
+    panel('Room for imagination','THE FURNITURE SHOP',topTabs([['shop','Shop furniture'],['owned','My inventory'],['discs','Records']],tab)+
       (tab==='discs'?`<p>Your own music, pressed into keepsakes. Each disc costs 10 credits and preserves that version of the song.</p><div id="catalogCards" class="record-grid"></div>`:
-      `<div class="catalog-toolbar"><input id="catalogSearch" class="search-field" value="${h(query)}" placeholder="Search furniture…" aria-label="Search furniture"><select id="catalogCategory" aria-label="Furniture category">${[['all','Everything'],['lounge','Seating & tables'],['music','Music'],['interactive','Interactive'],['decor','Decor']].map(([value,name])=>`<option value="${value}" ${filter===value?'selected':''}>${name}</option>`).join('')}</select></div><p class="catalog-balance">${credit(game.state.coins)} available · ${game.state.items.length} pieces owned</p><div id="catalogCards" class="furniture-grid"></div>`),true);
-    buttons('[data-tab]',b=>catalog(b.dataset.tab));
+      `<div class="catalog-layout"><nav class="collection-list" aria-label="Furniture collections">${collections.map(([key,name])=>`<button data-collection="${key}" class="${key===collection?'selected':''}" aria-pressed="${key===collection}"><span>${name}</span><small>${Object.values(Furniture.catalog).filter(c=>key==='all'||(c.collection||'originals')===key).length}</small></button>`).join('')}</nav><div class="catalog-main"><div class="collection-heading"><h3>${selected[1]}</h3><p>${selected[2]}</p></div><div class="catalog-toolbar"><input id="catalogSearch" class="search-field" value="${h(query)}" placeholder="Find your next favorite piece…" aria-label="Search furniture"><select id="catalogCategory" aria-label="Furniture category">${[['all','Every kind'],['lounge','Seats & tables'],['music','Music'],['interactive','Interactive'],['decor','Decor']].map(([value,name])=>`<option value="${value}" ${filter===value?'selected':''}>${name}</option>`).join('')}</select></div><p class="catalog-balance">${credit(game.state.coins)} to spend · ${game.state.items.length} pieces in your collection</p><div id="catalogCards" class="furniture-grid"></div></div></div>`),true);
+    get('modal').classList.add('catalog-modal');
+    buttons('[data-tab]',b=>catalog(b.dataset.tab));buttons('[data-collection]',b=>catalog(tab,filter,query,b.dataset.collection));
     if(tab==='discs'){
       get('catalogCards').innerHTML=game.state.discs.length?game.state.discs.map(d=>`<article class="song-card"><span class="disc-icon">◉</span><h3>${h(d.song.title)}</h3><p>by ${h(d.artist)} · ${d.song.bpm} BPM</p><button class="soft-button" data-play-disc="${d.id}">▶ Play record</button></article>`).join(''):'<p>Your record shelf is empty. Save a song in the studio, then press it in your library.</p>';
       buttons('[data-play-disc]',b=>playSong(game.state.discs.find(d=>d.id===b.dataset.playDisc).song));return;
     }
-    const refresh=()=>catalog(tab,get('catalogCategory').value,get('catalogSearch').value);
+    const refresh=()=>catalog(tab,get('catalogCategory').value,get('catalogSearch').value,collection);
     get('catalogCategory').onchange=refresh;
     get('catalogSearch').oninput=()=>{const p=get('catalogSearch').selectionStart;refresh();get('catalogSearch').focus();get('catalogSearch').setSelectionRange(p,p);};
-    const entries=tab==='shop'?Object.keys(Furniture.catalog).map(type=>({type})):game.state.items;
-    const filtered=entries.filter(i=>!i.wrapped&&(filter==='all'||category(i.type)===filter)&&Furniture.catalog[i.type].name.toLowerCase().includes(query.toLowerCase()));
-    if(!filtered.length)get('catalogCards').innerHTML='<p>No pieces match. Try another category.</p>';
+    const entries=tab==='shop'?Object.keys(Furniture.catalog).sort((a,b)=>Number(!!Furniture.catalog[b].atlas)-Number(!!Furniture.catalog[a].atlas)).map(type=>({type})):game.state.items;
+    const filtered=entries.filter(i=>{const c=Furniture.catalog[i.type];return !i.wrapped&&(filter==='all'||category(i.type)===filter)&&(collection==='all'||(c.collection||'originals')===collection)&&(c.name+' '+(c.description||'')+' '+(c.collection||'originals')).toLowerCase().includes(query.toLowerCase());});
+    if(!filtered.length)get('catalogCards').innerHTML='<p class="empty-state">No pieces here yet. Try another collection or search.</p>';
     filtered.forEach(item=>{
       const c=Furniture.catalog[item.type],b=document.createElement('button');b.className='furniture-card';
-      const name=document.createElement('b');name.textContent=c.name;const detail=document.createElement('small');detail.textContent=tab==='shop'?c.price+' ✦':item.placed===false?'In inventory':(game.state.rooms.find(r=>r.id===item.roomId)?.name||'In room');
+      const name=document.createElement('b');name.textContent=c.name;const detail=document.createElement('small');detail.textContent=tab==='shop'?c.price+' ✦'+(c.seats?' · '+c.seats.length+(c.seats.length===1?' seat':' seats'):''):item.placed===false?'In inventory':(game.state.rooms.find(r=>r.id===item.roomId)?.name||'In room');
       b.append(artCard(item.type),name,detail);b.onclick=()=>itemDetails(item.type,tab==='owned'?item.id:null);get('catalogCards').append(b);
     });
   }
@@ -194,7 +210,7 @@
   };
   function itemDetails(type,id){
     const item=game.state.items.find(i=>i.id===id),c=Furniture.catalog[type];
-    panel(c.name,'THE AFTERHOURS COLLECTION',`<div id="itemPreview" class="item-preview"></div><p>${h(descriptions[type])}</p><p>${c.w} × ${c.d} tiles · ${item?'Owned':credit(c.price)}</p><div class="button-row"><button id="itemPrimary" class="primary">${item?'Place / move piece':'Buy for '+c.price+' ✦'}</button>${item?'<button id="itemUse" class="soft-button">Interact</button>':''}<button id="backCatalog" class="soft-button">Back to catalog</button></div>`);
+    panel(c.name,'THE AFTERHOURS COLLECTION',`<div id="itemPreview" class="item-preview"></div><p>${h(c.description||descriptions[type])}</p><p>${c.w} × ${c.d} tiles · ${item?'Owned':credit(c.price)}</p><div class="button-row"><button id="itemPrimary" class="primary">${item?'Place / move piece':'Buy for '+c.price+' ✦'}</button>${item?'<button id="itemUse" class="soft-button">Interact</button>':''}<button id="backCatalog" class="soft-button">Back to catalog</button></div>`);
     get('itemPreview').append(artCard(type));button('backCatalog',()=>catalog(item?'owned':'shop'));
     button('itemPrimary',async()=>{
       let owned=item;
@@ -422,17 +438,20 @@
   function openObject(item){
     if(!item)return;
     const c=Furniture.catalog[item.type],actions=[];
-    if(['sofa','seat'].includes(item.type)){useSeat(roomSeats().filter(s=>s.itemId===item.id));close();return;}
+    if(c.seats?.length){useSeat(roomSeats().filter(s=>s.itemId===item.id));close();return;}
     const use=(label,fn)=>actions.push({label,fn});
-    if(item.type==='lamp'||item.type==='table')use(item.state===false?'Turn light on':'Turn light off',()=>{const out=act('itemAction',{id:item.id,action:'toggle'});if(out.ok)toast(out.result?'A warmer kind of night.':'Lights down.');});
-    if(item.type==='decks')use('Make a track',()=>studio());
-    if(item.type==='speaker'||item.type==='jukebox'){use('Choose room playlist',playlistPanel);use(music.running?'Stop music':'Play music',()=>music.running?stopMusic():startPlaylist());}
+    if(item.type==='lamp'||item.type==='table'||c.use==='light')use(item.state===false?'Turn light on':'Turn light off',()=>{const out=act('itemAction',{id:item.id,action:'toggle'});if(out.ok)toast(out.result?'A warmer kind of night.':'Lights down.');});
+    if(item.type==='decks'||c.use==='studio')use('Make a track',()=>studio());
+    if(item.type==='speaker'||item.type==='jukebox'||c.use==='playlist'){use('Choose room playlist',playlistPanel);use(music.running?'Stop music':'Play music',()=>music.running?stopMusic():startPlaylist());}
+    if(c.use==='look')use('Choose my look',look);
+    if(c.use==='stage')use('Go to the stage',()=>window.AfterhoursOnline?.connected()?window.AfterhoursOnline.stagePanel():stagePanel());
+    if(c.use==='arcade')use('Play arcade games',arcade);
     if(item.type==='records')use('Browse your records',()=>catalog('discs'));
     if(item.type==='vending')use('Get a soda · 2 ✦',()=>{
       if(!act('itemAction',{id:item.id,action:'soda'}).ok)return;
       carried={kind:'soda',until:Date.now()+60000};toast('A cold soda. Click Drink to enjoy it.');get('drinkButton').hidden=false;
     });
-    if(item.type==='plant')use('Water the palm',()=>{act('itemAction',{id:item.id,action:'water'},'A little care goes a long way.');});
+    if(item.type==='plant'||c.use==='water')use('Water the plant',()=>{act('itemAction',{id:item.id,action:'water'},'A little care goes a long way.');});
     if(item.type==='dice')use('Roll the dice',async()=>{
       let value;
       if(window.AfterhoursOnline?.connected()){
@@ -460,7 +479,7 @@
         button('wrapGift',()=>{if(act('itemAction',{id:item.id,action:'wrap',content:get('giftContents').value,note:get('giftNote').value},'A little surprise, wrapped and ready.').ok)close();});
       }});
     }
-    panel(c.name,'ROOM INTERACTION',`<div id="objectPreview" class="item-preview"></div><p>${h(item.contents?item.note:descriptions[item.type])}</p><div class="button-row">${actions.map((a,i)=>`<button class="${i===0?'primary':'soft-button'}" data-object-action="${i}">${h(a.label)}</button>`).join('')}<button class="soft-button" id="objectMove">Move / rotate</button></div>`);
+    panel(c.name,'ROOM INTERACTION',`<div id="objectPreview" class="item-preview"></div><p>${h(item.contents?item.note:c.description||descriptions[item.type])}</p><div class="button-row">${actions.map((a,i)=>`<button class="${i===0?'primary':'soft-button'}" data-object-action="${i}">${h(a.label)}</button>`).join('')}<button class="soft-button" id="objectMove">Move / rotate</button></div>`);
     get('objectPreview').append(artCard(item.type));buttons('[data-object-action]',b=>{const a=actions[+b.dataset.objectAction];if(a.direct)a.fn();else approach(item,a.fn);});
     button('objectMove',()=>{close();startEditing();selectFurniture(item.id);});
   }
@@ -500,13 +519,13 @@
     game.event('chats');runRules('say',body);
     const target=get('whisperTarget').value;
     logMessage(player.name,(mode==='whisper'?'→ '+(get('whisperTarget').selectedOptions[0]?.textContent||target)+' · ':mode==='shout'?'SHOUT · ':'')+body);
-    if(mode!=='whisper'){player.bubble=body.length>38?body.slice(0,35)+'…':body;player.until=Date.now()+5000;}
+    if(mode!=='whisper'){player.bubble=body;player.bubbleMode=mode;player.until=Date.now()+9000;}
     window.AfterhoursOnline?.chat(body,mode,target);
     if(!personal&&!game.state.settings.muteGuests&&mode!=='whisper'){
       const key=roomKey(),speaker=people[replyCount++%(rooms[roomIndex].count-1)];
       if(!game.state.blocked.includes(speaker.name))setTimeout(()=>{
         if(roomKey()!==key)return;const replies=residentReplies[speaker.name];const response=replies[replyCount%replies.length];
-        logMessage(speaker.name,response);speaker.bubble=response.slice(0,40);speaker.until=Date.now()+4500;
+        logMessage(speaker.name,response);speaker.bubble=response;speaker.bubbleMode='say';speaker.until=Date.now()+8000;
       },1500);
     }
   },true);
@@ -533,25 +552,17 @@
     if(editor.active||e.button!==0)return;
     const p=scenePoint(e);
     if(petPosition){const [x,y]=iso(petPosition.x,petPosition.y);if(Math.abs(p.x-x)<37&&p.y>y-65&&p.y<y+10){e.stopImmediatePropagation();petPanel();return;}}
-    if(personal){const hit=furnitureAt(e),item=hit&&decor.find(d=>d.id===hit.id);if(item&&!['sofa','seat'].includes(item.type)){e.stopImmediatePropagation();openObject(item);return;}}
+    if(personal){const hit=furnitureAt(e),item=hit&&decor.find(d=>d.id===hit.id);if(item&&!Furniture.catalog[item.type].seats?.length){e.stopImmediatePropagation();openObject(item);return;}}
     if(!personal){const hit=people.slice(0,rooms[roomIndex].count-1).find(person=>{const [x,y]=iso(person.x,person.y);return Math.abs(p.x-x)<22&&p.y>y-115&&p.y<y;});if(hit){e.stopImmediatePropagation();residentProfile(hit);return;}}
   },true);
   const legacyDrawFurniture=drawFurniture;
   drawFurniture=function(item,preview=false){
     const c=Furniture.catalog[item.type];
-    if(c.cell<8){
-      ctx.save();if(item.state===false&&['lamp','table'].includes(item.type))ctx.filter='brightness(.45)';legacyDrawFurniture(item,preview);ctx.restore();
-      if(!preview&&item.state!==false&&['lamp','table'].includes(item.type)){const g=furnitureGeometry(item);ctx.save();ctx.globalCompositeOperation='screen';const light=ctx.createRadialGradient(g.x,g.y-g.h*.6,1,g.x,g.y-g.h*.6,60);light.addColorStop(0,'#ffaa3622');light.addColorStop(1,'#ffaa3600');ctx.fillStyle=light;ctx.fillRect(g.x-60,g.y-g.h*.6-60,120,120);ctx.restore();}
-      return;
-    }
-    if(!newArt.complete||!newArt.naturalWidth)return;
-    const crop=newCrops[c.cell-8],size=Furniture.footprint(item),[x]=iso(item.x+size.w/2,item.y+size.d/2),[,y]=iso(item.x+size.w,item.y+size.d),w=c.width,height=crop[3]/crop[2]*w;
-    ctx.save();if(preview)ctx.globalAlpha=.6;ctx.translate(x,y);if(item.rot)ctx.scale(-1,1);ctx.drawImage(newArt,...crop,-w/2,-height,w,height);ctx.restore();
-    if(!preview){furnitureBounds.push({id:item.id,x:x-w/2,y:y-height,w,h:height,depth:item.x+item.y+size.w+size.d});
-      if(item.type==='dice'&&item.value)label(String(item.value),x,y-height-9,18,'#f5edce');
-      if(item.type==='portal'&&item.destination)label('LINKED',x,y-height-10,10,'#dcb1ff');
-    }
+    ctx.save();if(item.state===false&&(['lamp','table'].includes(item.type)||c.use==='light'))ctx.filter='brightness(.4)';legacyDrawFurniture(item,preview);ctx.restore();
+    if(!preview&&item.state!==false&&(['lamp','table'].includes(item.type)||c.use==='light')){const g=furnitureGeometry(item);ctx.save();ctx.globalCompositeOperation='screen';const light=ctx.createRadialGradient(g.x,g.y-g.h*.6,1,g.x,g.y-g.h*.6,60);light.addColorStop(0,'#ffaa3622');light.addColorStop(1,'#ffaa3600');ctx.fillStyle=light;ctx.fillRect(g.x-60,g.y-g.h*.6-60,120,120);ctx.restore();}
+    if(!preview){const g=furnitureGeometry(item);if(item.type==='dice'&&item.value)label(String(item.value),g.x,g.y-g.h-9,18,'#f5edce');if(item.type==='portal'&&item.destination)label('LINKED',g.x,g.y-g.h-10,10,'#dcb1ff');}
   };
+
   function drawPet(t){
     if(!petPosition||!game.state.pet||!newArt.complete||!newArt.naturalWidth)return;
     const [x,y]=iso(petPosition.x,petPosition.y),c=newCrops[6],w=66,height=c[3]/c[2]*w;
@@ -565,6 +576,7 @@
   let previousSeatMode=seating.mode;
   window.GameHooks={
     update(dt,t){
+      updateJourney();
       if(pendingUse&&!walker.moving&&!walker.path.length){
         const pending=pendingUse;pendingUse=null;const item=decor.find(d=>d.id===pending.itemId&&d.placed!==false);
         if(personal&&pending.room===activeRoomId&&item)pending.action();
@@ -594,7 +606,7 @@
       if(carried){const [x,y]=seating.mode==='sitting'?seating.target.offer.point:iso(player.x,player.y-0.0);ctx.save();ctx.translate(x+18,y-(seating.mode==='sitting'?22:65));ctx.fillStyle='#b8d4d0';ctx.fillRect(-4,-7,8,14);ctx.fillStyle='#e5e1bd';ctx.fillRect(-4,-8,8,3);ctx.restore();}
     }
   };
-  button('help',()=>panel('The night is yours','HOW TO PLAY',`<div class="help-grid"><article><b>01 · Make yourself at home</b><p>Click the floor to walk. Click seats to sit and other furniture to use it. Decorate moves and rotates your pieces.</p></article><article><b>02 · Find your sound</b><p>Make a track in Beat studio. Save it, perform on the stage, press a record, or export the audio.</p></article><article><b>03 · Earn your next thing</b><p>Check in daily, finish quests, play the arcade, and perform music. Collect your quest rewards in the Journal.</p></article><article><b>04 · Build your world</b><p>Create rooms, add usable objects, set up a playlist, leave notes, host events, and connect room logic.</p></article><article><b>05 · A little company</b><p>Adopt a cat, feed it, teach it tricks, and let it follow you. Click residents to open their profiles.</p></article><article><b>06 · Keep your progress</b><p>Your world saves automatically on this device. Export a backup from your profile. Shared sessions add real guests when the local game service is running.</p></article></div><p class="small-note">Keyboard: arrows/WASD move · 1 wave · 2 dance · Esc stand · R rotate while decorating. Chat: :wave, :dance, :stand, :shout.</p>`,true));
+  button('help',()=>panel('The night is yours','HOW TO PLAY',`<div class="help-grid"><article><b>01 · Make yourself at home</b><p>Click the floor to walk. Click seats to sit and other furniture to use it. Decorate moves and rotates your pieces.</p></article><article><b>02 · Find your sound</b><p>Make a track in Beat studio. Save it, perform on the stage, press a record, or export the audio.</p></article><article><b>03 · Earn your next thing</b><p>Check in daily, finish quests, play the arcade, and perform music. Collect your quest rewards in the Journal.</p></article><article><b>04 · Build your world</b><p>Create rooms, add usable objects, set up a playlist, leave notes, host events, and connect room logic.</p></article><article><b>05 · A little company</b><p>Adopt a cat, feed it, teach it tricks, and let it follow you. Click residents to open their profiles.</p></article><article><b>06 · Keep your progress</b><p>Your world saves automatically on this device. Export a backup from your profile. Shared sessions add real guests when the local game service is running.</p></article></div><p class="small-note">Camera: +/− zoom · Fit shows the whole room · ◎ follows you · Space + drag pans. Keyboard: arrows/WASD move · 1 wave · 2 dance · Esc stand · R rotate while decorating. Chat: :wave, :dance, :stand, :shout.</p>`,true));
   sync();resetPet();populateChat();syncFavorite();updateHUD();game.save();
   if(loadError)toast(loadError);
   // A narrow bridge for the optional multiplayer client, never for UI automation.
@@ -602,10 +614,10 @@
     game,saveWorld,sync,toast,panel,close,h,button,buttons,room,roomKey,visitRoom,enterRoom,player,walker,canvas,ctx,
     getScene:()=>({personal,roomIndex,activeRoomId,decor,spriteIndex,seating,iso,roomSeats:roomSeats()}),
     setRemoteChat:(name,text)=>logMessage(name,text),
-    spriteImage,backImage,seatedImage,seatedCrops,drawAvatarLabels,
+    spriteImage,backImage,seatedImage,seatedCrops,drawAvatarLabels,drawWalker,avatarDepth,
     setSeat:offers=>useSeat(offers),stand:()=>standUp(),navigationOptions,refreshWhispers,
     openJournal:journal,download,stagePanel,playSong,stopMusic,
-    openCatalog:catalog,
+    openCatalog:catalog,openNavigator,
     updateHUD,showStudio:studio,
     setActiveRoom:id=>{activeRoomId=id;game.state.activeRoom=id;},
     applyState:state=>{game.state=state;activeRoomId=state.activeRoom||state.rooms[0].id;spriteIndex=state.profile.avatar||0;sync();draft=copy(state.draft);$('.profile-art').style.backgroundPosition=(-spriteIndex*35)+'px -4px';resetPet();}

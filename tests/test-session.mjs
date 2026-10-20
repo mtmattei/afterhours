@@ -2,6 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialWorld,createGuest,authenticate,action,snapshot,tick} from '../session-core.mjs';
 const setup=async()=>{const db=initialWorld(),a=await createGuest(db,{name:'Alice'}),b=await createGuest(db,{name:'Bob'});return {db,a:await authenticate(db,a.token),b:await authenticate(db,b.token)};};
+test('new two-seat furniture saves and reserves each seat independently',async()=>{
+ const {db,a,b}=await setup(),now=Date.now();
+ action(db,a,'command',{type:'buy',payload:{type:'loveseat',id:'new-sofa'}},now);
+ action(db,a,'layout',{room:'home',items:[{id:'new-sofa',x:6,y:4,placed:true}]},now);
+ const key='home:'+a.id+':home';action(db,a,'joinRoom',{key},now);action(db,b,'joinRoom',{key},now);
+ action(db,a,'seat',{id:'new-sofa:0',point:[900,600]},now);
+ assert.throws(()=>action(db,b,'seat',{id:'new-sofa:0',point:[900,600]},now));
+ action(db,b,'seat',{id:'new-sofa:1',point:[950,620]},now);
+ assert.throws(()=>action(db,b,'seat',{id:'new-sofa:2',point:[950,620]},now));
+ assert.equal(db.rooms[key].seats['new-sofa:0'],a.id);assert.equal(db.rooms[key].seats['new-sofa:1'],b.id);
+ const restored=JSON.parse(JSON.stringify(db));assert.equal(restored.users[a.id].game.items.find(i=>i.id==='new-sofa').x,6);
+ assert.equal(restored.users[a.id].game.coins,165);
+});
 test('shared dice return the same server result displayed to both players',async()=>{
  const {db,a,b}=await setup(),now=Date.now();
  action(db,a,'command',{type:'buy',payload:{type:'dice',id:'shared-die'}},now);

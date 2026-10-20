@@ -8,6 +8,37 @@ requests per UTC day bound this supervised playtest. No paid plan was enabled.
 Friends can play as guests; Google linking remains invite-only in Testing.
 The owner deferred adding friends' Google emails. The game explains this limit.
 
+ROOMS, CONVERSATION AND FURNISHING
+The room now fills the main view, with a closer fixed-angle camera, Fit and
+Follow controls, desktop panning and touch-drag panning outside Decorate mode.
+Floor clicks map correctly through zoom and pan. Remote players now use the
+same distance-driven walking cycle as your own avatar.
+
+Full public messages appear in readable, wrapping bubbles above avatars, with
+two recent messages per person; whispers remain private in chat history.
+A one-click travel bar and illustrated Navigator make the four public venues
+and personal rooms easier to reach.
+
+The furniture shop now has 47 pieces: 32 new original sprites across loft,
+diner, studio, arcade and garden collections. New sofas, booths, chairs,
+beanbags and stools support seating; multiplayer reservations use each item's
+actual seat count. Furniture orientation and seat anchors share the same
+projection, and seated people remain behind closer furniture. Existing item
+identities, prices and saved progress are retained.
+
+Anatomy guidance informed projection consistency, grounding and painter's
+order. The existing raster/canvas art pipeline remains in use; this is not
+an SVG conversion or a claim of full Habbo/MyCoke feature parity. Decorative
+beds do not yet support lying down; arcade cabinets open the existing arcade.
+
+Verified on desktop and at 390px: placement, seated pose, restored layout,
+stacked full-message bubbles, quick travel and the new catalog. Automated
+coverage includes catalog purchases/save validation, seat reservations,
+camera click mapping, speech lifetime/privacy and seated depth ordering.
+All 58 automated cases pass. The Release Uno build verifies the compiled
+runtime, compatibility bridge and all 30 current game files.
+The downloadable v0.5.0 GitHub release remains the earlier preview.
+
 RECOVERY
 Added Sign out on this device for linked accounts. Unlinked guests are protected
 from accidental sign-out. Verified full sign-out, reload and Google restore on

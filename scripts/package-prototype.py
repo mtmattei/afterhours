@@ -11,17 +11,19 @@ dist = project / 'dist'
 references = '\n'.join(p.read_text(encoding='utf-8') for p in dist.iterdir() if p.suffix in ['.js','.css','.html'])
 assets = {
     path.name: 'data:image/png;base64,' + base64.b64encode(path.read_bytes()).decode()
-    for path in sorted((dist/'assets').glob('*.png')) if 'assets/'+path.name in references
+    for path in sorted((dist/'assets').glob('*.png'))
 }
 html = (dist/'index.html').read_text(encoding='utf-8')
-css = (dist/'style.css').read_text(encoding='utf-8')+'\n'+(dist/'game.css').read_text(encoding='utf-8')
+styles = re.findall(r'<link rel="stylesheet" href="([^"]+)">', html)
+css = '\n'.join((dist/name).read_text(encoding='utf-8') for name in styles)
 for name in assets:
     css = css.replace("url('assets/"+name+"')", 'var(--asset-'+name.replace('.','-')+')')
 html = html.replace('<link rel="stylesheet" href="style.css">', '<style>'+css+'</style>')
-html = html.replace('<link rel="stylesheet" href="game.css">','')
+for name in styles[1:]:
+    html = html.replace('<link rel="stylesheet" href="'+name+'">','')
 boot = '<script>window.ART='+json.dumps(assets,separators=(',',':'))+''';
 // CSS custom properties have a size ceiling. Render small UI thumbnails at their display scale.
-for(const name of ['avatars.png','side-b.png','room-atlas.png']){
+for(const name of ['avatars.png','side-b.png','room-atlas.png','my-room.png']){
  const image=new Image();
  image.onload=()=>{const thumb=document.createElement('canvas'),size=name==='avatars.png'?504:384;
   thumb.width=size;thumb.height=Math.round(image.naturalHeight/image.naturalWidth*size);
@@ -31,12 +33,14 @@ for(const name of ['avatars.png','side-b.png','room-atlas.png']){
 }
 </script>'''
 html = html.replace('<script src="movement.js">', boot+'<script src="movement.js">')
-for name in ['movement.js','furniture.js','seating.js','app.js','game-core.js','music.js','arcade.js','game.js','runtime-config.js','accounts.js','online-session.js','online.js']:
+for name in re.findall(r'<script src="([^"]+)"></script>', html):
     script = (dist/name).read_text(encoding='utf-8').replace('</script', '<\\/script')
+    script = script.replace("'assets/'+file", "window.ART[file]")
     for asset in assets:
         script = script.replace("'assets/"+asset+"'", "window.ART['"+asset+"']")
     html = html.replace('<script src="'+name+'"></script>', '<script>'+script+'</script>')
 assert not re.search(r'<script[^>]+src=',html)
+assert not re.search(r'<link rel="stylesheet"',html)
 assert "url('assets/" not in html
 (root/'release/Afterhours.html').write_text(html,encoding='utf-8')
 with zipfile.ZipFile(root/'release/afterhours-prototype.zip','w',zipfile.ZIP_DEFLATED) as archive:

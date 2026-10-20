@@ -25,7 +25,7 @@ NEXT     Capacity, passwords, builder roles, room size/layout choice, wallpapers
          floor finishes, beds, pools and swimming.
 
 BUILDING AND OBJECTS
-PLAYABLE Fifteen furniture types, inventory ownership, purchasing, category
+PLAYABLE Forty-seven furniture types, inventory ownership, purchasing, category
          search, item previews, moving, dragging, rotating, storing and Undo.
 PLAYABLE Two sofa cushions and single chairs, with routed front approaches.
 PLAYABLE Blueprint snapshots and restoring owned pieces without duplication.

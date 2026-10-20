@@ -99,7 +99,7 @@ function applyAction(db,user,type,p={},now=Date.now()){
     case 'seat': {
       const seat=clean(p.id,120);let valid=false;
       if(user.room.startsWith('public:')){const i=Number(user.room.slice(7));valid=new RegExp('^lounge-'+i+'-\\d+$').test(seat)&&Number(seat.split('-').at(-1))<publicCounts[i];}
-      else{const owner=roomOwner(db,user.room),meta=ownedRoom(db,user.room);valid=owner.game.items.some(i=>i.roomId===meta.id&&i.placed!==false&&['seat','sofa'].includes(i.type)&&(seat===i.id+':0'||i.type==='sofa'&&seat===i.id+':1'));}
+      else{const owner=roomOwner(db,user.room),meta=ownedRoom(db,user.room);valid=owner.game.items.some(i=>i.roomId===meta.id&&i.placed!==false&&F.catalog[i.type]?.seats?.some((_,index)=>seat===i.id+':'+index));}
       if(!valid)throw Error('That seat is not available.');
       if(current.seats[seat]&&current.seats[seat]!==user.id)throw Error('Someone is already sitting there.');
       release(db,user);current.seats[seat]=user.id;const point=Array.isArray(p.point)?p.point.map(Number):[];
@@ -112,7 +112,7 @@ function applyAction(db,user,type,p={},now=Date.now()){
       const mode=['say','shout','whisper'].includes(p.mode)?p.mode:'say',to=mode==='whisper'?p.to:null;
       if(to&&(!db.users[to]||db.users[to].room!==user.room))throw Error('That person is not in this room.');
       chat(db,user.room,user.game.profile.name,text,mode,to,user.id);model(user).event('chats');
-      if(mode!=='whisper')user.pose.bubble={text,until:now+5000};break;
+      if(mode!=='whisper')user.pose.bubble={text,mode,until:now+9000};break;
     }
     case 'command':{
       const allowed=['checkin','quest','profile','buy','room','roomSettings','favorite','song','deleteSong','disc','adopt','pet','note','deleteNote','blueprint','restoreBlueprint','itemAction'];

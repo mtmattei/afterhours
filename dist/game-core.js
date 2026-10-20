@@ -1,15 +1,15 @@
 (function (root, factory) {
-  const api = factory();
+  const api = factory(typeof module === 'object' && module.exports ? require('./furniture.js') : root.AfterhoursFurniture);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.AfterhoursGame = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (F) {
   'use strict';
   const clone = value => JSON.parse(JSON.stringify(value));
   const uid = () => typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(36).slice(2);
   const day = (time = Date.now()) => new Date(time).toISOString().slice(0, 10);
   const text = (value, max = 80) => String(value ?? '').trim().slice(0, max);
   const clamp = (value, min, max) => Math.max(min, Math.min(max, Number(value) || 0));
-  const prices = {sofa:80,decks:90,speaker:45,plant:40,lamp:40,table:40,seat:40,records:30,jukebox:100,vending:65,portal:85,dice:35,notice:30,bowl:20,gift:25};
+  const prices = Object.fromEntries(Object.entries(F.catalog).map(([id,item])=>[id,item.price]));
   const quests = [
     {id:'hello',name:'Your first hello',description:'Say something in room chat.',stat:'chats',target:1,reward:20,xp:20},
     {id:'tour',name:'Find your frequency',description:'Visit all four public rooms.',stat:'visited',target:4,reward:60,xp:50},
@@ -184,9 +184,9 @@
         }
         case 'itemAction': {
           const item=s.items.find(i=>i.id===payload.id&&i.placed!==false);if(!item)throw Error('Place this object in a room first.');
-          if(payload.action==='toggle'&&['lamp','table'].includes(item.type)){item.state=item.state===false;result=item.state;}
+          if(payload.action==='toggle'&&(['lamp','table'].includes(item.type)||F.catalog[item.type]?.use==='light')){item.state=item.state===false;result=item.state;}
           else if(payload.action==='soda'&&item.type==='vending'){ledger(s,-2,'Soda',uid(),now);}
-          else if(payload.action==='water'&&item.type==='plant'){item.watered=now;}
+          else if(payload.action==='water'&&(item.type==='plant'||F.catalog[item.type]?.use==='water')){item.watered=now;}
           else if(payload.action==='roll'&&item.type==='dice'){item.value=1+Math.floor(Math.random()*6);result=item.value;}
           else if(payload.action==='link'&&item.type==='portal'){
             if(!s.rooms.some(r=>r.id===payload.destination))throw Error('Choose one of your rooms.');

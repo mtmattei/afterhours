@@ -31,3 +31,43 @@ Use case: identity-preserve. Edit target: the provided six-avatar sheet. Produce
 
 SEATED POSES
 Use case: identity-preserve. Edit target: the provided six-avatar lineup. Produce a companion SEATED pose sheet, transparent PNG, landscape 3:1 aspect, SIX equal-width columns in ONE row. Preserve exact identities, faces, hair, clothing, slender proportions, and pixel-art rendering. The same six characters in the same order are sitting on invisible chairs, each facing lower-right three-quarter toward the viewer. No chair or furniture drawn. Their hips sit on an imaginary horizontal seat, thighs extend forward, knees bent clearly at 90 degrees, shins vertical, both feet hanging below then resting on an imaginary floor. Hands resting naturally on thighs. Upright torsos, relaxed seated posture. Keep heads and torso identical in scale to reference, no chibi change, no kneeling or squat. Complete full-body silhouettes including shoes, every character isolated inside its equal column, feet aligned on one baseline, heads aligned; do not fill freed vertical space by enlarging the bodies. Character 1 lime jacket brown hair charcoal cargos; 2 afro orange sweater cream pants; 3 lavender bob purple/black hoodie blue trousers; 4 black beanie blue/cream varsity dark jeans; 5 braids coral tee black trousers red sneakers; 6 black hair black/yellow tee olive cargos. Transparent background, no text, no labels, no props, no seat image, no floor, no shadows.
+
+
+FURNITURE EXPANSION — BUILT-IN IMAGE GENERATION, 20 OCTOBER 2026
+Outputs: dist/assets/furniture-loft-v1.png and furniture-culture-v1.png.
+Both original 1254 x 1254 RGBA PNGs are kept unchanged. The game uses authored
+crop rectangles and mirrors the sprites to match the room's floor axes.
+
+SHARED DIRECTION
+Production sprite atlas for an original social isometric virtual world called
+Afterhours. Exactly 16 isolated furniture sprites in a precise 4 column by
+4 row grid, equal square cells, large consistent clear gutters. Every object
+completely contained inside its own cell, centered, no overlapping neighbouring
+cells. Transparent alpha background, no background, no floor tiles, no captions,
+no letters, no logos, no framing. Consistent isometric projection, looking down
+at 30 degrees, visible front and right side, all seating fronts face lower right.
+Sophisticated nostalgic 2000s social-world game art: beautifully crafted detailed
+pixel-inspired sprites with very crisp clean edges, rich tactile materials,
+subtle warm lighting, chamfered wood, small metal details, strong silhouette.
+Not icons, not flat vectors, not generic UI graphics. Deep walnut, cream, muted
+teal, burnt orange, soft mauve, warm brass palette. Objects are substantial
+dimensional furniture with beautifully legible silhouettes. Each object has
+its own rich unique design. Full atlas square, high resolution.
+
+LOFT / DINER, ROW BY ROW
+Mint loveseat, coral beanbag, cream boucle chair, red vinyl diner booth;
+teal chrome stool, cream tulip table, walnut glass coffee table, writing desk;
+bookcase, lavender quilt bed, sage wardrobe, aquarium cabinet;
+mint fridge, espresso bar, purple lava lamp, pink neon moon.
+
+STUDIO / ARCADE / GARDEN, ROW BY ROW
+Analog synthesizer, teal drum kit, brass microphone, orange guitar on stand;
+silver boombox, purple arcade cabinet, orange pinball cabinet, basketball arcade;
+monstera, bonsai, cactus, glass terrarium;
+stone fountain, lily pond, amber lantern, cedar flower planter.
+
+CRAFT REFERENCE
+https://github.com/wheresryan22/anatomy/blob/main/SKILL.md (MIT)
+Applied guidance: shared isometric projection, grounded objects, correct
+back-to-front layering and calm movement. No third-party drawing code or
+Anatomy artwork is shipped in the game.

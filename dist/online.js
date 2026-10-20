@@ -162,11 +162,11 @@
     W.button('kickPlayer',()=>send('kick',{user:id}).then(panel));W.button('banPlayer',()=>send('ban',{user:id}).then(panel));
   }
   function roomDirectory(){
-    W.panel('Rooms with a heartbeat','SHARED NAVIGATOR',`<div class="directory-list">${[0,1,2,3].map(i=>`<button class="directory-room" data-shared-room="public:${i}"><span class="room-symbol">${['◉','☕','✳','☁'][i]}</span><span><b>${['Side B','Midnight Diner','The Greenhouse','Cloud Nine'][i]}</b><small>Public hangout</small></span><em>Enter ↗</em></button>`).join('')}${state.rooms.map(r=>`<button class="directory-room" data-shared-room="${h(r.key)}"><span class="room-symbol">⌂</span><span><b>${h(r.name)}</b><small>by ${h(r.owner)} · ${r.count} guests · ${h(r.door)}</small></span><em>${r.door==='doorbell'?'Ring':'Enter'} ↗</em></button>`).join('')}</div>`);
+    W.panel('Rooms with a heartbeat','SHARED NAVIGATOR',`<div class="directory-list destination-grid">${[0,1,2,3].map(i=>`<button class="directory-room" data-shared-room="public:${i}"><span class="destination-art public-${i}"></span><span><b>${['Side B','Midnight Diner','The Greenhouse','Cloud Nine'][i]}</b><small>Public hangout</small></span><em>Enter ↗</em></button>`).join('')}${state.rooms.map(r=>`<button class="directory-room" data-shared-room="${h(r.key)}"><span class="destination-art home"></span><span><b>${h(r.name)}</b><small>by ${h(r.owner)} · ${r.count} guests · ${h(r.door)}</small></span><em>${r.door==='doorbell'?'Ring':'Enter'} ↗</em></button>`).join('')}</div>`);
     W.buttons('[data-shared-room]',b=>joinRoom(b.dataset.sharedRoom));
   }
   async function joinRoom(key){
-    joining=true;try{
+    if(joining)return false;joining=true;try{
       const out=await send('joinRoom',{key});
       if(out.result?.waiting){W.toast('Doorbell rung. The host will answer shortly.');return false;}
       renderRoom();W.close();return true;
@@ -275,16 +275,15 @@
       const crop=W.seatedCrops[index],height=118,width=crop[2]/crop[3]*height;
       W.ctx.translate(...pose.seat.point);if(pose.seat.flip)W.ctx.scale(-1,1);
       W.ctx.drawImage(W.seatedImage,...crop,-width*.28,-height*.62,width,height);W.ctx.restore();
-      W.drawAvatarLabels({name:peer.name,bubble:pose.bubble?.text,until:pose.bubble?.until},pose.seat.point[0],pose.seat.point[1]+height*.38,false);return;
+      W.drawAvatarLabels({id:peer.id,name:peer.name,bubble:pose.bubble?.text,bubbleMode:pose.bubble?.mode,until:pose.bubble?.until},pose.seat.point[0],pose.seat.point[1]+height*.38,false);return;
     }
-    const art=pose.back?W.backImage:W.spriteImage,sw=art.naturalWidth/6,sh=art.naturalHeight,height=118,width=sw/sh*height;
-    W.ctx.translate(x,y+(pose.dancing?Math.sin(t/115)*4:0));if(pose.flip)W.ctx.scale(-1,1);
-    if(sw&&sh)W.ctx.drawImage(art,index*sw,0,sw,sh,-width/2,-height,width,height);
-    W.ctx.restore();W.drawAvatarLabels({name:peer.name,bubble:pose.bubble?.text,until:pose.bubble?.until},x,y,false);
+    W.ctx.translate(x,y+(pose.dancing&&!reducedMotion?Math.sin(t/115)*4:0));
+    W.drawWalker(p,t,{...pose,moving:p.moving,phase:p.phase||0},index);
+    W.ctx.restore();W.drawAvatarLabels({id:peer.id,name:peer.name,bubble:pose.bubble?.text,bubbleMode:pose.bubble?.mode,until:pose.bubble?.until},x,y,false);
     W.ctx.fillStyle='#b5e8b2';W.ctx.beginPath();W.ctx.arc(x+22,y+26,3,0,Math.PI*2);W.ctx.fill();
   }
   const api={
-    connected:()=>online,remoteRoom:()=>remote,peers:()=>state?.peers||[],panel,renderFriends,stagePanel,queueSong,
+    directory:roomDirectory,connected:()=>online,remoteRoom:()=>remote,peers:()=>state?.peers||[],panel,renderFriends,stagePanel,queueSong,
     visitOwnRoom:id=>joinRoom('home:'+state.self.id+':'+id),
     rollDice:id=>send('command',{type:'itemAction',payload:{id,action:'roll'}}).then(out=>out.result),
     chat:(text,mode,to)=>{if(online&&!(mode==='whisper'&&!state.peers.some(p=>p.id===to)))send('chat',{text,mode,to}).catch(()=>{});},
@@ -292,7 +291,7 @@
     arcadeStart:(game,id)=>{if(online)send('arcadeStart',{game,id}).catch(()=>{});},
     update(dt,t){
       if(!online||Date.now()<retryAfter||document.hidden)return;
-      for(const peer of state?.peers||[]){let p=rendered.get(peer.id);if(!p){p={x:peer.pose.x,y:peer.pose.y};rendered.set(peer.id,p);}const k=1-Math.exp(-dt*12);p.x+=(peer.pose.x-p.x)*k;p.y+=(peer.pose.y-p.y)*k;}
+      for(const peer of state?.peers||[]){let p=rendered.get(peer.id);if(!p){p={x:peer.pose.x,y:peer.pose.y};rendered.set(peer.id,p);}const k=1-Math.exp(-dt*12),dx=(peer.pose.x-p.x)*k,dy=(peer.pose.y-p.y)*k,distance=Math.hypot(dx,dy);p.x+=dx;p.y+=dy;p.moving=distance>dt*.08&&!peer.pose.seat?.sitting;p.phase=(p.phase||0)+distance*Math.PI*2/1.15;}
       const scene=W.getScene(),pose={x:W.player.x,y:W.player.y,back:W.walker.back,flip:W.walker.flip,dancing,avatar:scene.spriteIndex,seated:scene.seating.mode==='sitting'},key=JSON.stringify(pose);
       const sync=AfterhoursSession.syncKind({now:t,lastResponse,lastPose,poseChanged:key!==poseSignature,peers:state?.peers.length,busy:pending||joining||polling,hidden:document.hidden,paused:Date.now()<retryAfter});
       if(sync==='pose'){lastPose=t;poseSignature=key;send('pose',pose,true).catch(()=>{});}
@@ -303,7 +302,7 @@
       }
       if(get('sharedStage')&&state?.stage){const el=get('sharedStage').querySelector('.stage-now>p');if(el)el.textContent='by '+state.stage.artist+' · '+Math.max(0,Math.ceil((state.stage.end-Date.now())/1000))+'s remaining';}
     },
-    layers(layers,t){if(!online)return;for(const peer of state?.peers||[])layers.push({depth:peer.pose.seat?.sitting?100:peer.pose.x+peer.pose.y,draw:()=>drawPeer(peer,t)});}
+    layers(layers,t){if(!online)return;for(const peer of state?.peers||[])layers.push({depth:W.avatarDepth(rendered.get(peer.id)||peer.pose,peer.pose.seat?.sitting?peer.pose.seat:null),draw:()=>drawPeer(peer,t)});}
   };
   window.AfterhoursOnline=api;
   const label=get('connectionLabel');label.style.cursor='pointer';label.setAttribute('role','button');label.tabIndex=0;label.onclick=panel;label.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();panel();}};

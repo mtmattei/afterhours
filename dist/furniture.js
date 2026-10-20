@@ -4,13 +4,13 @@
   else root.AfterhoursFurniture = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const catalog = {
-    sofa: { name: 'Blue velvet sofa', cell: 0, w: 2, d: 1, width: 240, price: 80 },
+    sofa: { name: 'Blue velvet sofa', seats: [[.35,.43],[.61,.56]], cell: 0, w: 2, d: 1, width: 240, price: 80 },
     decks: { name: 'Walnut DJ console', cell: 1, w: 2, d: 1, width: 238, price: 90 },
     speaker: { name: 'Studio speaker', cell: 2, w: 1, d: 1, width: 94, price: 45 },
     plant: { name: 'Potted palm', cell: 3, w: 1, d: 1, width: 118, price: 40 },
     lamp: { name: 'Amber floor lamp', cell: 4, w: 1, d: 1, width: 72, price: 40 },
     table: { name: 'Candle table', cell: 5, w: 1, d: 1, width: 120, price: 40 },
-    seat: { name: 'Purple lounge chair', cell: 6, w: 1, d: 1, width: 150, price: 40 },
+    seat: { name: 'Purple lounge chair', seats: [[.53,.44]], cell: 6, w: 1, d: 1, width: 150, price: 40 },
     records: { name: 'Record crate', cell: 7, w: 1, d: 1, width: 100, price: 30 },
     jukebox: { name: 'Afterhours jukebox', cell: 8, w: 1, d: 1, width: 125, price: 100 },
     vending: { name: 'Soda machine', cell: 9, w: 1, d: 1, width: 115, price: 65 },
@@ -18,12 +18,52 @@
     dice: { name: 'Game dice', cell: 11, w: 1, d: 1, width: 85, price: 35 },
     notice: { name: 'Message board', cell: 12, w: 1, d: 1, width: 155, price: 30 },
     bowl: { name: 'Pet bowl', cell: 13, w: 1, d: 1, width: 65, price: 20 },
-    gift: { name: 'Gift box', cell: 15, w: 1, d: 1, width: 85, price: 25 }
+    gift: { name: 'Gift box', cell: 15, w: 1, d: 1, width: 85, price: 25 },
+    loveseat: {"name": "Mint daybed sofa", "atlas": "loft", "crop": [20, 43, 305, 272], "collection": "loft", "category": "lounge", "w": 2, "d": 1, "width": 235, "price": 75, "description": "Two soft seats, cream cushions, and nowhere to rush.", "seats": [[0.66, 0.45], [0.34, 0.59]]},
+    beanbag: {"name": "Coral beanbag", "atlas": "loft", "crop": [370, 40, 250, 245], "collection": "loft", "category": "lounge", "w": 1, "d": 1, "width": 144, "price": 35, "description": "Sink into a little pocket of comfort.", "seats": [[0.51, 0.48]]},
+    boucle: {"name": "Cloud boucle chair", "atlas": "loft", "crop": [684, 40, 248, 260], "collection": "loft", "category": "lounge", "w": 1, "d": 1, "width": 145, "price": 55, "description": "A soft curved chair for long conversations.", "seats": [[0.53, 0.48]]},
+    booth: {"name": "Cherry diner booth", "atlas": "loft", "crop": [980, 16, 255, 288], "collection": "diner", "category": "lounge", "w": 2, "d": 1, "width": 225, "price": 70, "description": "Two seats for coffee and late-night company.", "seats": [[0.70, 0.48], [0.34, 0.62]]},
+    stool: {"name": "Teal counter stool", "atlas": "loft", "crop": [104, 325, 135, 283], "collection": "diner", "category": "lounge", "w": 1, "d": 1, "width": 76, "price": 25, "description": "Pull up a seat at your own cafe.", "seats": [[0.54, 0.35]]},
+    tulip: {"name": "Tulip cafe table", "atlas": "loft", "crop": [351, 351, 258, 255], "collection": "diner", "category": "lounge", "w": 1, "d": 1, "width": 125, "price": 35, "description": "Cream enamel, polished chrome, and a place for two."},
+    coffee: {"name": "Walnut glass table", "atlas": "loft", "crop": [640, 396, 301, 212], "collection": "loft", "category": "lounge", "w": 2, "d": 1, "width": 195, "price": 45, "description": "A glass-topped table with a trailing plant and a few favorite things."},
+    desk: {"name": "Lamplight writing desk", "atlas": "loft", "crop": [980, 319, 254, 298], "collection": "loft", "category": "decor", "w": 2, "d": 1, "width": 190, "price": 60, "description": "For the studio you always wanted."},
+    bookcase: {"name": "Collected stories shelf", "atlas": "loft", "crop": [59, 619, 197, 320], "collection": "loft", "category": "decor", "w": 1, "d": 1, "width": 117, "price": 50, "description": "Books, tiny treasures, and warm walnut."},
+    bed: {"name": "Lavender quilt bed", "atlas": "loft", "crop": [326, 667, 342, 263], "collection": "loft", "category": "decor", "w": 2, "d": 2, "width": 225, "price": 90, "description": "Make your own quiet bedroom retreat. Decorative bed."},
+    wardrobe: {"name": "Sage wardrobe", "atlas": "loft", "crop": [702, 619, 187, 316], "collection": "loft", "category": "interactive", "w": 1, "d": 1, "width": 112, "price": 55, "description": "Open the wardrobe to choose your look.", "use": "look"},
+    aquarium: {"name": "Blue-hour aquarium", "atlas": "loft", "crop": [975, 624, 242, 307], "collection": "loft", "category": "decor", "w": 2, "d": 1, "width": 185, "price": 85, "description": "A little underwater world for your room."},
+    fridge: {"name": "Mint retro fridge", "atlas": "loft", "crop": [76, 934, 173, 296], "collection": "diner", "category": "decor", "w": 1, "d": 1, "width": 103, "price": 45, "description": "The mint-green heart of a tiny diner."},
+    espresso: {"name": "After-midnight coffee bar", "atlas": "loft", "crop": [359, 943, 269, 292], "collection": "diner", "category": "decor", "w": 2, "d": 1, "width": 195, "price": 65, "description": "Polished chrome and fresh-coffee atmosphere."},
+    lava: {"name": "Violet lava lamp", "atlas": "loft", "crop": [765, 931, 95, 288], "collection": "loft", "category": "interactive", "w": 1, "d": 1, "width": 57, "price": 30, "description": "A slow violet glow. Click to switch it on or off.", "use": "light"},
+    moon: {"name": "Neon moon sign", "atlas": "loft", "crop": [1012, 925, 200, 299], "collection": "loft", "category": "interactive", "w": 1, "d": 1, "width": 100, "price": 40, "description": "A pink crescent for your late-night corner.", "use": "light"},
+    synth: {"name": "Analog dream synthesizer", "atlas": "culture", "crop": [42, 35, 273, 270], "collection": "studio", "category": "music", "w": 2, "d": 1, "width": 195, "price": 70, "description": "Open the beat studio and write your next track.", "use": "studio"},
+    drums: {"name": "Teal session drums", "atlas": "culture", "crop": [361, 20, 273, 277], "collection": "studio", "category": "music", "w": 2, "d": 2, "width": 200, "price": 85, "description": "A full drum kit. Click to make a rhythm in the studio.", "use": "studio"},
+    mic: {"name": "Golden-hour microphone", "atlas": "culture", "crop": [722, 17, 164, 270], "collection": "studio", "category": "music", "w": 1, "d": 1, "width": 80, "price": 35, "description": "Open the stage and choose a song to perform.", "use": "stage"},
+    guitar: {"name": "Sunburst guitar stand", "atlas": "culture", "crop": [1045, 8, 136, 290], "collection": "studio", "category": "music", "w": 1, "d": 1, "width": 66, "price": 40, "description": "Your guitar is waiting. Open the studio to make a track.", "use": "studio"},
+    boombox: {"name": "Mixtape boombox", "atlas": "culture", "crop": [42, 365, 261, 253], "collection": "studio", "category": "music", "w": 1, "d": 1, "width": 116, "price": 35, "description": "Play your room playlist or choose the next track.", "use": "playlist"},
+    arcade: {"name": "Cosmic arcade cabinet", "atlas": "culture", "crop": [380, 307, 208, 324], "collection": "arcade", "category": "interactive", "w": 1, "d": 1, "width": 116, "price": 70, "description": "Open the arcade and play for credits.", "use": "arcade"},
+    pinball: {"name": "Solar pinball cabinet", "atlas": "culture", "crop": [680, 306, 258, 325], "collection": "arcade", "category": "interactive", "w": 1, "d": 2, "width": 154, "price": 80, "description": "A collectible cabinet that opens the Afterhours arcade.", "use": "arcade"},
+    hoops: {"name": "Backboard arcade", "atlas": "culture", "crop": [1001, 307, 223, 324], "collection": "arcade", "category": "interactive", "w": 1, "d": 2, "width": 155, "price": 80, "description": "Build a games corner. Opens the Afterhours arcade.", "use": "arcade"},
+    monstera: {"name": "Monstera in cream", "atlas": "culture", "crop": [38, 634, 253, 291], "collection": "garden", "category": "decor", "w": 1, "d": 1, "width": 120, "price": 30, "description": "A big leafy friend in a ceramic pot.", "use": "water"},
+    bonsai: {"name": "Little bonsai sanctuary", "atlas": "culture", "crop": [358, 639, 248, 301], "collection": "garden", "category": "decor", "w": 1, "d": 1, "width": 116, "price": 40, "description": "A miniature tree on a carved wood pedestal.", "use": "water"},
+    cactus: {"name": "Desert cactus", "atlas": "culture", "crop": [718, 635, 147, 293], "collection": "garden", "category": "decor", "w": 1, "d": 1, "width": 83, "price": 25, "description": "A warm desert corner in terracotta.", "use": "water"},
+    terrarium: {"name": "Glass garden terrarium", "atlas": "culture", "crop": [995, 665, 225, 268], "collection": "garden", "category": "decor", "w": 1, "d": 1, "width": 124, "price": 45, "description": "A tiny garden under glass.", "use": "water"},
+    fountain: {"name": "Courtyard fountain", "atlas": "culture", "crop": [23, 940, 268, 287], "collection": "garden", "category": "decor", "w": 2, "d": 2, "width": 215, "price": 70, "description": "A stone centerpiece for your garden room."},
+    pond: {"name": "Lily-pad pond", "atlas": "culture", "crop": [334, 961, 334, 256], "collection": "garden", "category": "decor", "w": 2, "d": 2, "width": 240, "price": 75, "description": "Water lilies and a little rocky waterfall."},
+    lantern: {"name": "Evening garden lantern", "atlas": "culture", "crop": [726, 940, 113, 291], "collection": "garden", "category": "interactive", "w": 1, "d": 1, "width": 65, "price": 30, "description": "Warm amber light for your garden after dark.", "use": "light"},
+    planter: {"name": "Wildflower window box", "atlas": "culture", "crop": [945, 958, 294, 266], "collection": "garden", "category": "decor", "w": 2, "d": 1, "width": 190, "price": 35, "description": "A cedar box full of lavender and wildflowers.", "use": "water"}
   };
+  const mirrored = item => Boolean(item.rot % 2) !== Boolean(catalog[item.type].atlas);
   const footprint = item => {
     const c = catalog[item.type];
     return item.rot % 2 ? { w: c.d, d: c.w } : { w: c.w, d: c.d };
   };
+  // Keep a seated person immediately in front of their seat, while allowing
+  // furniture closer to the viewer to cover them naturally.
+  const depth = item => { const {w,d}=footprint(item); return item.x+item.y+w+d-.1; };
+  function actorDepth(actor, seatId, items) {
+    const seat=seatId&&items.find(item=>item.placed!==false&&catalog[item.type]?.seats?.some((_,i)=>seatId===item.id+':'+i));
+    return seat?depth(seat)+.01:actor.x+actor.y;
+  }
   function tiles(item) {
     const { w, d } = footprint(item), result = [];
     for (let x = item.x; x < item.x + w; x++)
@@ -55,5 +95,5 @@
       { id: 'starter-records', type: 'records', x: 6, y: 2, rot: 0, placed: true }
     ];
   }
-  return { catalog, footprint, tiles, canPlace, normalize, starter };
+  return { catalog, mirrored, footprint, depth, actorDepth, tiles, canPlace, normalize, starter };
 });

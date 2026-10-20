@@ -1,0 +1,54 @@
+AFTERHOURS / SIDE B — MOVEMENT & ROOM EDITOR
+
+A late-night music hotel with original isometric environment art, six expressive streetwear avatars, and a room-first game interface.
+
+WHAT CHANGED
+The original sage dashboard and primitive block artwork have been replaced. The interface uses midnight charcoal, acid-yellow accents, condensed music-poster typography, consistent line icons, textured vinyl player artwork, and a compact room navigator. Chat has a separate rail. The room occupies the central stage.
+
+All four rooms have new art: Side B's amber vinyl bar; the pink neon Midnight Diner; a lush rooftop Greenhouse; and the violet Cloud Nine lounge. Six illustrated avatar looks replace simple shirt-color variations. Outfit selection saves locally. The room adds zoom controls and respects reduced-motion preferences for interface motion and character movement.
+
+PLAY
+Open index.html in the dist folder, or open the standalone Afterhours.html in the outputs folder. Click the floor or focus the room and hold arrow keys or WASD to move. Wave and dance with the controls or keys 1 and 2. Choose an avatar through My look. Use Beat studio to edit and play the original synthesized loop. Choose My room, then Decorate to arrange your own layout. Decorate also takes you home directly from a public room.
+
+REAL IN THIS PROTOTYPE
+Rendered rooms, walking, gestures, room switching, avatar selection, local chat, music sequencing and playback, zoom, local furniture purchases, and browser persistence.
+
+SIMULATED
+Other guests, their messages, social counts, and friends. There is no connected multiplayer service or real-money commerce. Character motion uses an articulated canvas rig with directional artwork; it is not yet a full hand-drawn animation set. Furniture has two mirrored orientations. Chairs and sofas support sitting. Beds and other furniture actions remain to be built. Public-room furnishings belong to the hosted layouts; editing is available in My room.
+
+ART
+Created with the built-in image-generation tool. Environment and character art is saved in dist/assets. The exact production prompts are included in ART-PROMPTS.txt. The images are integrated into the live canvas scene with clickable movement and avatars, rather than used as a screenshot of an interface.
+
+NEXT PRODUCTION PASS
+Beds, usable appliances, hand-authored character animation, synchronized multiplayer presence, shared beat sessions, accounts, moderation, and room permissions.
+
+WALKING UPDATE
+Movement follows eight-direction tile routes with quick acceleration and braking, exact arrival, and continuous retargeting. Gait follows traveled distance: alternating leg swing, lifted feet, and slight weight shift. Routes avoid guests and placed furniture, including blocked diagonal corners.
+
+MOVE FURNITURE
+Click a piece, then click a clear tile. Or drag it by its artwork.
+Green footprints show valid placement; red footprints show an occupied or out-of-bounds tile.
+R or Rotate changes orientation. Esc cancels selection.
+Put away keeps the item in your owned inventory. Furniture opens the inventory and shop.
+Undo restores the last layout change during the current editing session. Done returns to walking.
+Positions, orientations, inventory, coins and avatar choices save on this device.
+Eight starter pieces are included; older purchased items are preserved in inventory.
+The personal room now has an empty architectural background with independent, selectable furniture sprites.
+
+VALIDATION
+Ten mechanics checks cover path detours, blocked corners, occupied destinations, exact arrival at 30/60/120 Hz, gait timing, mid-step retargeting, rotated footprints, collisions and stored inventory.
+Browser checks cover moving, dragging, rotation, occupied-tile rejection, Undo, inventory ownership, persistence after reload and walking.
+
+SEATING & CHARACTER CONSISTENCY UPDATE
+Click a chair or sofa in My room or any public lounge to walk to it and sit.
+Sofas offer separate cushions. Rotation changes the approach side. A blocked
+front tile cannot be used. Click the floor, use movement keys, press Esc, or
+choose Stand up to get up. A room change or editing mode cancels seating.
+Seating uses dedicated art for all six outfits and a separate action controller.
+The rear view now uses matching standing turnarounds, preserving the original
+sprite proportions and native aspect ratio. The mismatched compressed walk
+atlas is no longer used.
+Nine additional mechanics checks cover approach tiles, rotation, reservations,
+arrival, standing, cancellation, and removed furniture. Browser checks cover
+personal/public seating, room transitions, and the replacement rear artwork.
+See REMAKE-ROADMAP.txt for the wider Habbo/Coke Studios feature inventory.

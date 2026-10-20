@@ -1,0 +1,144 @@
+AFTERHOURS — SOCIAL MUSIC WORLD
+Playable development build 0.5 · 20 October 2026
+
+The homage preserves walking into rooms, sitting together, conversation,
+music creation, performances, collecting and decorating. This is an original
+remake in development, not a claim of complete Habbo/Coke Music parity.
+
+STATUS
+PLAYABLE: implemented in the solo browser build.
+SHARED: implemented through the Node service and portable Worker backend.
+PARTIAL: a usable subset exists; the remaining behavior is named.
+NEXT: not implemented. Public deployment is not complete.
+
+ROOMS AND AVATARS
+PLAYABLE Click paths, held movement, obstacle routing, distance-driven gait,
+         interruption, front/back art, sitting, standing, wave and dance.
+SHARED   Connected guest avatars, interpolated movement, appearance, posture,
+         exclusive seat reservations and reconnect to saved character.
+PARTIAL  Six complete outfits; independent face/hair/clothes/accessories and
+         complete emote animation are still needed. Remote gait is simpler.
+PLAYABLE Four public rooms and up to twelve personal rooms; names, descriptions,
+         tags, search, favorites, recent rooms and five lighting moods.
+SHARED   Open/private/doorbell access, entry requests, owner kick/ban.
+NEXT     Capacity, passwords, builder roles, room size/layout choice, wallpapers,
+         floor finishes, beds, pools and swimming.
+
+BUILDING AND OBJECTS
+PLAYABLE Fifteen furniture types, inventory ownership, purchasing, category
+         search, item previews, moving, dragging, rotating, storing and Undo.
+PLAYABLE Two sofa cushions and single chairs, with routed front approaches.
+PLAYABLE Blueprint snapshots and restoring owned pieces without duplication.
+PARTIAL  Two orientations. Four-facing art, wall placement, surface stacking
+         and recolorable collections remain.
+PLAYABLE Lamps/candles toggle; water plants; dispense, carry and drink soda;
+         roll dice; link room portals; message boards; pet bowls; jukeboxes.
+PARTIAL  Portals travel to owned rooms but do not pair arrival anchors.
+PARTIAL  Gift wrapping/unwrapping works locally. Wrapped gifts and music discs
+         cannot yet transfer through the shared furniture trade.
+PARTIAL  Room rules offer enter/say/sit/dice triggers and lights/message/music
+         effects. This is local room logic, not a synchronized Wired editor.
+NEXT     Rollers, gates, scoreboards, trophies, inscriptions, collaborative
+         building and edit conflict resolution.
+
+SOCIAL
+PLAYABLE Chat bubbles, per-room history, say/shout/whisper controls and profiles.
+SHARED   Nearby speech, whole-room shouting, private recipient-filtered whispers,
+         friend requests/accept/decline/remove/follow, real presence.
+SHARED   Block and stored player reports; owner room removal and bans.
+PARTIAL  Named resident NPCs provide solo company. They are explicitly identified
+         separately from connected people.
+PARTIAL  Guest access persists in one browser. No recovery or cross-device login.
+PARTIAL  Room event name/countdown; no global event calendar or invites.
+NEXT     Direct-message inbox, groups/clubs, membership/roles, shared group rooms,
+         moderation dashboard, report triage, appeals and account deletion.
+
+MUSIC
+PLAYABLE Four instruments, 16/32 steps, three synthesized sound packs, tempo,
+         per-lane volume/mute/solo, undo, clear, naming, library and WAV export.
+PLAYABLE Immutable versions pressed onto local collectible music discs.
+PLAYABLE Solo stage with resident reactions, queue and completed-set rewards.
+SHARED   Ordered stage queue, common playback timestamp, audience applause,
+         one vote per listener and capped durable performance payouts.
+PARTIAL  Shared listening uses browser audio scheduling; drift and mobile
+         background/resume behavior still need a broader device audit.
+PLAYABLE Personal jukebox playlists.
+NEXT     Arrangements beyond two bars, authored sample packs, charts, discovery,
+         artist pages, disc gifting/trading, collaborative jams and city venues.
+
+ECONOMY AND PROGRESSION
+PLAYABLE Daily gifts, eight quests, seven badges, XP/levels, wallet history,
+         capped arcade/performance rewards, browser save backup/export/import.
+SHARED   Service-owned balances and inventories. Solo imports cannot change
+         online money. Trades commit only after both participants confirm;
+         changed offers revoke confirmation; cancel/expiry preserve ownership.
+PARTIAL  Arcade rewards validate server round timing and daily limits, but
+         result scoring remains client-reported. Competitive rewards need
+         authoritative simulation before production use.
+NEXT     Marketplace, listings, limited drops, seasonal collections, membership
+         perks and durable disc/gift transfer.
+
+GAMES AND COMPANIONS
+PLAYABLE Tile Rush: 45-second tile control against a resident opponent.
+PLAYABLE Snow Jam: movement, aimed snowballs, collision and a five-hit win.
+PLAYABLE Pop Quiz: eight music questions, timer, scoring and personal best.
+PLAYABLE Tabby adoption, naming, hunger/happiness/energy, care cooldowns,
+         feeding, play, training, learned Sit/Spin and following.
+PARTIAL  These are original games inspired by the era, not exact historical
+         recreations. Shared opponents, match lobbies and leaderboards remain.
+NEXT     Pool diving, balance duels, V-ego San, Uncover the Music, MyCoke Coaster,
+         Recycler, Sports Challenge, furniture-game hosting and configurable bots.
+
+PLATFORM AND RELEASE
+IMPLEMENTED Uno Platform WinUI/XAML shell targeting .NET 10 Browser WebAssembly.
+            The existing canvas game runs in Uno WebView2; it is not all XAML.
+IMPLEMENTED Portable Worker adapter, D1 migration, revision-based atomic writes,
+            origin restrictions and bounded playtest limits.
+PARTIAL     Local two-browser presence/chat and restored identity have been
+            observed. Unit/database tests cover ownership and server rules.
+BLOCKED     Sites publishing helper credential handoff was rejected by automatic
+            approval review: this session disables sandbox approval requests.
+NEXT        Public release after remaining game and operational acceptance gates.
+
+RELEASE GATES
+1. Complete avatar/object art and keyboard/touch/accessibility audit.
+2. Exercise shared seating, trade, performance, doors and reconnect on multiple
+   browsers/devices under latency and disconnects.
+3. Replace the bounded single-world backend snapshot with room-level storage
+   and transactional inventory/ledger records; add idempotent command receipts.
+4. Recoverable accounts, moderation operations, privacy controls, load test and
+   security review before an unrestricted social-world launch.
+5. Audit the historical feature inventory by edition against archived clients,
+   manuals and footage. Do not call this feature-complete while major rows remain.
+
+
+REFERENCE NOTES
+These sources establish feature families; implementation choices above are
+design proposals. Current official documentation can describe later features,
+so later systems are kept separate from the classic foundation. Coke Music's
+historical coverage below includes secondary reconstruction and needs further
+archive corroboration before claiming exhaustive fidelity.
+
+[H1] Habbo official: furniture interaction, inventory, seating, refreshments,
+     teleporters, rollers and notes.
+     https://help.habbo.com/hc/en-us/articles/360011512940-What-is-Furni
+[H2] Habbo Origins official: furniture trading.
+     https://help.origins.habbo.com/hc/en-us/articles/19494635995677-How-do-I-trade-furniture
+[H3] Habbo Origins official: nearby speech and shouting.
+     https://help.origins.habbo.com/hc/en-us/articles/19491078995613-Why-can-t-I-hear-what-people-say
+[H4] Habbo official: Wired triggers, conditions and effects.
+     https://help.habbo.com/hc/en-us/articles/360011620099-What-is-Wired-Furni
+[H5] Habbo official: collectible furniture categories.
+     https://help.habbo.com/hc/en-us/articles/360011621699-Furni-Definitions
+[H6] Habbo official: pets and care.
+     https://help.habbo.com/hc/en-us/articles/360011512700-What-are-Habbo-Pets
+[H7] Habbo official: room bots.
+     https://help.habbo.com/hc/en-us/articles/360011620199-Bots
+[H8] Habborator: historical Trax, CDs and jukebox reconstruction.
+     https://www.habborator.org/trax/
+[H9] Habbox Wiki: historical Battle Ball and other classic game families.
+     https://habboxwiki.com/Battle_Ball
+[C1] MyCoke historical overview: music performances, rewards and minigames.
+     https://en.wikipedia.org/wiki/MyCoke
+[C2] Decibel preservation project: visible Coke Studios-era product structure.
+     https://decibel.fun/

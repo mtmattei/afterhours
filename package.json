@@ -1,0 +1,14 @@
+{
+  "name": "afterhours",
+  "version": "0.5.0",
+  "private": true,
+  "description": "A social music world, with an Uno Platform WebAssembly shell",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node server.mjs",
+    "start:uno": "node scripts/start-uno.mjs",
+    "build:uno": "node scripts/build-uno.mjs",
+    "build:service": "node service/scripts/build.mjs && node service/scripts/validate-artifact.mjs",
+    "test": "node service/scripts/build.mjs && node --test tests/test-game.cjs tests/test-mechanics.cjs tests/test-seating.cjs tests/test-session.mjs tests/test-worker.mjs"
+  }
+}

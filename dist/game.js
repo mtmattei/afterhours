@@ -1,0 +1,604 @@
+/* Afterhours: the local game. The optional session service adds real guests. */
+(() => {
+  'use strict';
+  const G=AfterhoursGame, h=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const get=(id)=>document.getElementById(id),copy=G.clone;
+  let loaded=null,loadError='',lastBackup=0;
+  try{const raw=localStorage.getItem('afterhours-v5');if(raw)loaded=G.validate(JSON.parse(raw));}catch(e){loadError='Your game save could not be opened. The original has been kept for recovery.';}
+  const game=new G.Game(loaded,{...saved,coins,decor},state=>{
+    try{
+      const serialized=JSON.stringify(state);
+      const online=window.AfterhoursOnline?.connected();
+      if(!online&&Date.now()-lastBackup>30000){const old=localStorage.getItem('afterhours-v5');if(old)localStorage.setItem('afterhours-v5-backup',old);lastBackup=Date.now();}
+      localStorage.setItem(online?'afterhours-online-cache':'afterhours-v5',serialized);updateHUD();
+    }catch{toast('Your browser could not save. Export a backup from your profile.');}
+  });
+  let activeRoomId=game.state.activeRoom,screen='',pendingUse=null,carried=null,cleanupGame=null;
+  let draft=copy(game.state.draft),music=new AfterhoursMusic(),studioHistory=[],stage=null,stageTimer=null,lastHud=0;
+  let interactionBounds=[],petPosition=null,petWalker=null,lastPetPath=0,petPoseUntil=0,petPose='';
+  let newArt=new Image();newArt.src='assets/game-objects.png';
+  // The atlas geometry is finalized by the asset packaging pass.
+  const newCrops=[[108,12,325,460],[514,17,317,463],[940,11,332,482],[1364,93,326,391],[80,446,363,415],[525,573,333,228],[926,490,338,356],[1374,519,332,335]];
+  const room=()=>window.AfterhoursOnline?.remoteRoom()||game.state.rooms.find(r=>r.id===activeRoomId)||game.state.rooms[0];
+  const roomKey=()=>window.AfterhoursOnline?.remoteRoom()?'shared:'+room().key:personal?'my:'+activeRoomId:'public:'+roomIndex;
+  const legacyPersist=persist,legacyEnter=enterRoom,legacyWalk=walkTo,legacySeat=useSeat,legacyLook=look,legacyStand=standUp;
+  function sync(){
+    coins=game.state.coins;player.name=game.state.profile.name;
+    decor=window.AfterhoursOnline?.remoteRoom()?.items||game.state.items.filter(i=>i.placed===false||i.roomId===activeRoomId);
+    updateHUD();
+  }
+  function saveWorld(){
+    if(window.AfterhoursOnline?.remoteRoom())return;
+    const s=game.state,map=new Map(decor.map(i=>[i.id,i]));
+    s.items=s.items.map(i=>map.has(i.id)?{...map.get(i.id),roomId:map.get(i.id).placed===false?null:activeRoomId}:i);
+    for(const item of decor)if(!s.items.some(i=>i.id===item.id))s.items.push({...item,roomId:item.placed===false?null:activeRoomId});
+    s.coins=coins;s.activeRoom=activeRoomId;s.profile.avatar=spriteIndex;
+  }
+  persist=function(){if(window.AfterhoursOnline?.remoteRoom()){toast('Only the room owner can move these pieces.');return;}saveWorld();legacyPersist();game.save();window.AfterhoursOnline?.saveLayout();};
+  function act(type,payload={},success){
+    if((type==='buy'||type==='room')&&!payload.id)payload.id=G.uid();
+    try{saveWorld();const result=game.dispatch(type,payload);sync();if(success)toast(typeof success==='function'?success(result):success);return {ok:true,result};}
+    catch(e){notifyError(e.message);return {ok:false};}
+  }
+  function notifyError(text){
+    const el=get('panelError');if(el){el.textContent=text;el.hidden=false;}else toast(text);
+  }
+  function panel(title,kicker,body,wide=false){
+    screen=title;get('modal').classList.toggle('wide',wide);
+    modal(`<div class="eyebrow">${h(kicker)}</div><h2>${h(title)}</h2><p id="panelError" class="panel-error" role="alert" hidden></p>${body}`);
+  }
+  function close(){get('modal').close();}
+  get('modal').addEventListener('close',()=>{screen='';get('modal').classList.remove('wide');if(cleanupGame){cleanupGame();cleanupGame=null;}});
+  function button(id,fn){const b=get(id);if(b)b.onclick=fn;}
+  function buttons(selector,fn){get('modalBody').querySelectorAll(selector).forEach(b=>b.onclick=()=>fn(b));}
+  const field=(label,id,value='',placeholder='',kind='text')=>`<label class="form-field">${h(label)}<input type="${kind}" id="${id}" value="${h(value)}" placeholder="${h(placeholder)}"></label>`;
+  const topTabs=(items,active)=>`<div class="panel-tabs">${items.map(([id,name])=>`<button data-tab="${id}" class="${id===active?'selected':''}">${name}</button>`).join('')}</div>`;
+  const credit=amount=>`${amount} <span class="credit-symbol">✦</span>`;
+  function updateHUD(){
+    if(!get('profileName'))return;
+    const s=game.state,l=G.level(s);get('coins').textContent=s.coins;get('profileName').textContent=s.profile.name;get('profileLevel').textContent='LEVEL '+String(l).padStart(2,'0');
+    get('residentLevel').textContent='LEVEL '+String(l).padStart(2,'0');get('residentXp').textContent=s.profile.xp+' XP';
+    const lower=(l-1)**2*100,upper=l*l*100;get('xpFill').style.width=((s.profile.xp-lower)/(upper-lower)*100)+'%';
+    const available=G.quests.filter(q=>!s.claimed.includes(q.id)&&G.progress(s,q)>=q.target).length;
+    get('questCount').textContent=available||'';get('questCount').hidden=!available;
+    const next=G.quests.find(q=>!s.claimed.includes(q.id));get('nextQuest').textContent=next?next.name:'The night is yours';
+    get('nextQuestDetail').textContent=next?`${Math.min(next.target,G.progress(s,next))} / ${next.target} · ${next.reward} credits`:'Make a track. Build a room. Meet someone.';
+    get('dailyClaim').textContent=s.lastCheckin===G.day()?'Checked in ✓':'Daily gift · 35 ✦';
+    get('dailyClaim').disabled=s.lastCheckin===G.day();
+  }
+  // Keep the room visible while tools live in focused, accessible panels.
+  get('profile').innerHTML='<span class="profile-art"></span><span><b id="profileName"></b><small id="profileLevel"></small></span><span class="chevron">⌄</span>';
+  $('.profile-art').style.backgroundPosition=(-spriteIndex*35)+'px -4px';
+  $('.prototype-label').innerHTML='<i></i> <span id="connectionLabel">SOLO WORLD</span>';
+  $('.brand sup').textContent='PLAY';
+  $('footer>span').textContent='Saved on this device · Resident characters are NPCs';
+  $('.chat-fineprint>span').textContent='RESIDENT CHAT';
+  $('.club-pass').innerHTML='<div class="resident-stats"><b id="residentLevel"></b><span id="residentXp"></span></div><div class="xp-meter"><i id="xpFill"></i></div><b id="nextQuest"></b><small id="nextQuestDetail"></small><button id="dailyClaim"></button>';
+  const nav=document.querySelector('.rail nav');
+  const questNav=document.createElement('button');questNav.className='nav';questNav.id='questsOpen';questNav.innerHTML='<svg><use href="#i-grid"/></svg>Journal <span id="questCount" class="reward-count" hidden></span>';nav.append(questNav);
+  const arcadeNav=document.createElement('button');arcadeNav.className='nav';arcadeNav.id='arcadeOpen';arcadeNav.innerHTML='<svg><use href="#i-world"/></svg>Arcade';nav.append(arcadeNav);
+  const dock=document.createElement('div');dock.className='game-dock';dock.innerHTML='<button id="stageOpen"><span>♫</span>Stage</button><button id="catalogOpen"><span>▧</span>Catalog</button><button id="myRoomsOpen"><span>⌂</span>My rooms</button><button id="petOpen"><span>♧</span>Companion</button><button id="roomTools"><span>⚙</span>Room tools</button>';
+  $('.action-bar').after(dock);
+  const activity=document.createElement('div');activity.id='activityCard';activity.className='activity-card';activity.hidden=true;$('.scene-card').before(activity);
+  button('dailyClaim',()=>{if(act('checkin',{},'35 credits and 15 XP. Welcome back.').ok)journal();});
+  button('questsOpen',()=>journal());button('arcadeOpen',arcade);button('stageOpen',stagePanel);button('catalogOpen',()=>catalog());button('myRoomsOpen',()=>directory('mine'));button('petOpen',petPanel);button('roomTools',roomTools);
+  button('profile',profile);button('allRooms',()=>directory('all'));button('saveRoom',()=>{
+    act('favorite',{id:roomKey()});syncFavorite();
+  });
+  function syncFavorite(){liked=game.state.favorites.includes(roomKey());get('likes').textContent=liked?'Saved':'Save';get('saveRoom').classList.toggle('is-saved',liked);}
+  enterRoom=function(index,mine=false){
+    pendingUse=null;if(personal)saveWorld();
+    sync();legacyEnter(index,mine);
+    if(mine){get('roomTitle').textContent=room().name;get('roomMeta').textContent=`by ${player.name} · ${room().description||'Your personal room'}`;}
+    else{
+      game.event('visited',index);$('.people-strip small').textContent=(rooms[index].count-1)+' residents + you';
+      get('roomMeta').textContent=`${rooms[index].mood} · resident hangout`;
+    }
+    const key=roomKey();game.state.history=[key,...game.state.history.filter(k=>k!==key)].slice(0,20);game.save();syncFavorite();runRules('enter');resetPet();
+  };
+  function visitRoom(id){if(personal)saveWorld();activeRoomId=id;game.state.activeRoom=id;sync();enterRoom(0,true);close();}
+  document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{
+    if(b.dataset.view==='look')look();else if(b.dataset.view==='studio')studio();else if(b.dataset.view==='room')visitRoom(activeRoomId);else enterRoom(0,false);
+  });
+  document.querySelectorAll('[data-room]').forEach(b=>b.onclick=()=>enterRoom(+b.dataset.room));
+  walkTo=function(point){pendingUse=null;return legacyWalk(point);};
+  useSeat=function(offers){pendingUse=null;return legacySeat(offers);};
+  standUp=function(animate=true){return legacyStand(animate);};
+  const legacyPlace=placeGhost;
+  placeGhost=function(){const success=legacyPlace();if(success)game.event('builds');return success;};
+  function journal(tab='quests'){
+    const s=game.state;
+    let body=topTabs([['quests','Quests'],['badges','Badges'],['wallet','Wallet']],tab);
+    if(tab==='quests'){
+      body+='<p>A little direction for your night. Finish a quest, then collect its reward.</p><div class="quest-list">';
+      body+=G.quests.map(q=>{const value=Math.min(q.target,G.progress(s,q)),claimed=s.claimed.includes(q.id);return `<article class="quest-row ${claimed?'completed':''}"><div class="quest-mark">${claimed?'✓':value===q.target?'✦':'○'}</div><div><b>${h(q.name)}</b><p>${h(q.description)}</p><div class="mini-meter"><i style="width:${value/q.target*100}%"></i></div><small>${value} / ${q.target} · ${q.xp} XP</small></div><button class="${value===q.target&&!claimed?'primary':'soft-button'}" data-claim="${q.id}" ${value<q.target||claimed?'disabled':''}>${claimed?'Collected':credit(q.reward)}</button></article>`;}).join('')+'</div>';
+    }else if(tab==='badges'){
+      body+='<p>Small keepsakes from nights well spent.</p><div class="badge-grid">'+G.achievements.map(a=>`<article class="badge-card ${s.profile.badges.includes(a.id)?'unlocked':''}"><span>${a.icon}</span><b>${h(a.name)}</b><p>${h(a.description)}</p><small>${Math.min(a.target,G.progress(s,a))} / ${a.target}</small></article>`).join('')+'</div>';
+    }else{
+      body+=`<div class="wallet-total">${credit(s.coins)}<small>Your credits · earned through play</small></div><p>Daily check-in: 35 credits. Stage: 40 credits for the first five performances each day. Arcade: up to 30 credits for the first eight rounds.</p><div class="ledger">`;
+      body+=s.ledger.length?s.ledger.map(e=>`<div><span>${h(e.reason)}<small>${new Date(e.date).toLocaleDateString()}</small></span><b class="${e.amount>0?'positive':''}">${e.amount>0?'+':''}${e.amount} ✦</b></div>`).join(''):'<p>Your first reward starts the story.</p>';body+='</div>';
+    }
+    panel('Your night, your story','RESIDENT JOURNAL',body,true);
+    buttons('[data-tab]',b=>journal(b.dataset.tab));buttons('[data-claim]',b=>{if(act('quest',{id:b.dataset.claim},'Reward collected.').ok)journal();});
+  }
+  function profile(){
+    const s=game.state;
+    panel('This is you','RESIDENT PROFILE',`<div class="profile-summary"><div class="profile-art large-avatar" style="background-position:${-spriteIndex*70}px 0"></div><div><h3>${h(s.profile.name)}</h3><p>Level ${G.level(s)} · ${s.profile.xp} XP<br>Here since ${new Date(s.profile.joined).toLocaleDateString()}</p></div></div>
+      <form id="profileForm">${field('Display name','displayName',s.profile.name)}${field('Motto','motto',s.profile.motto)}<button class="primary">Save profile</button> <button type="button" class="soft-button" id="profileLook">Change outfit</button></form>
+      <div class="panel-section"><h3>Your keepsakes</h3><div class="badge-chips">${s.profile.badges.length?s.profile.badges.map(id=>{const a=G.achievements.find(x=>x.id===id);return `<span>${a?.icon||'★'} ${h(a?.name||id)}</span>`;}).join(''):'<p>Your first badge is waiting in the Journal.</p>'}</div></div>
+      <div class="panel-section"><h3>Keep your world</h3><p>Export a save to keep your rooms, songs, furniture, credits, and companion together.</p><div class="button-row"><button id="exportSave" class="soft-button">Export save</button><label class="soft-button file-button">Restore save<input type="file" id="importSave" accept=".json,application/json"></label><button id="backupSave" class="soft-button">Use last backup</button></div></div>`);
+    get('profileForm').onsubmit=e=>{e.preventDefault();if(act('profile',{name:get('displayName').value,motto:get('motto').value},'Profile saved.').ok){player.name=game.state.profile.name;profile();}};
+    button('profileLook',()=>look());
+    button('exportSave',()=>{saveWorld();download(new Blob([JSON.stringify(game.state,null,2)],{type:'application/json'}),'afterhours-save.json');});
+    get('importSave').onchange=async e=>{
+      const file=e.target.files[0];if(!file)return;
+      try{if(file.size>5000000)throw Error('Choose an Afterhours save smaller than 5 MB.');const next=G.validate(JSON.parse(await file.text()));
+        panel('Restore this world?','SAVE RECOVERY',`<p>This save belongs to <b>${h(next.profile.name)}</b> and contains ${next.rooms.length} rooms, ${next.items.length} furniture pieces, and ${next.songs.length} songs. Your current world will be kept as a backup.</p><button id="confirmRestore" class="primary">Restore saved world</button>`);
+        button('confirmRestore',()=>restoreSave(next));
+      }catch(e){notifyError(e.message);}
+    };
+    button('backupSave',()=>{
+      try{const backup=localStorage.getItem('afterhours-v5-backup');if(!backup)throw Error('No previous backup is available yet.');
+        const next=G.validate(JSON.parse(backup));panel('Recover your last backup','SAVE RECOVERY',`<p>Restore ${h(next.profile.name)}’s previous world with ${next.coins} credits and ${next.songs.length} songs?</p><button id="confirmBackup" class="primary">Restore backup</button>`);button('confirmBackup',()=>restoreSave(next));
+      }catch(e){notifyError(e.message);}
+    });
+  }
+  function restoreSave(next){localStorage.setItem('afterhours-v5-backup',JSON.stringify(game.state));game.state=next;activeRoomId=next.activeRoom;spriteIndex=next.profile.avatar||0;game.save();sync();draft=copy(next.draft);resetPet();visitRoom(activeRoomId);toast('Your world is restored.');}
+  function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);}
+  look=function(){legacyLook();get('modal').classList.remove('wide');const done=get('lookDone');done.onclick=()=>{game.state.profile.avatar=spriteIndex;game.save();close();toast('Look saved.');};};
+  function directory(filter='all',query=''){
+    const s=game.state,entries=rooms.map((r,i)=>({key:'public:'+i,name:r.title,description:r.mood,id:i,kind:'public',icon:r.icon})).concat(s.rooms.map(r=>({key:'my:'+r.id,name:r.name,description:r.description,id:r.id,kind:'mine',icon:'⌂'})));
+    let list=entries.filter(e=>(filter==='all'||filter==='mine'&&e.kind==='mine'||filter==='favorites'&&s.favorites.includes(e.key)||filter==='recent'&&s.history.includes(e.key))&&(e.name+' '+e.description).toLowerCase().includes(query.toLowerCase()));
+    if(filter==='recent')list.sort((a,b)=>s.history.indexOf(a.key)-s.history.indexOf(b.key));
+    panel('Find your people','ROOM NAVIGATOR',topTabs([['all','All rooms'],['mine','My rooms'],['favorites','Favorites'],['recent','Recent']],filter)+`<input class="search-field" id="roomSearch" value="${h(query)}" placeholder="Search rooms…" aria-label="Search rooms"><div class="directory-list">${list.map(e=>`<button class="directory-room" data-key="${h(e.key)}"><span class="room-symbol">${e.icon}</span><span><b>${h(e.name)}</b><small>${h(e.description)}</small></span><em>${e.kind==='mine'?'YOURS':'PUBLIC'} ↗</em></button>`).join('')||'<p>No rooms match this search.</p>'}</div><button class="primary" id="newRoom">＋ Create a room</button>`);
+    buttons('[data-tab]',b=>directory(b.dataset.tab,query));
+    get('roomSearch').oninput=e=>{const value=e.target.value,position=e.target.selectionStart;directory(filter,value);get('roomSearch').focus();get('roomSearch').setSelectionRange(position,position);};
+    buttons('[data-key]',b=>{if(b.dataset.key.startsWith('my:'))visitRoom(b.dataset.key.slice(3));else{enterRoom(+b.dataset.key.slice(7));close();}});
+    button('newRoom',()=>{
+      panel('A room of your own','CREATE A ROOM',`<p>Make a studio, a café, a game room, or somewhere quiet. You can own up to twelve rooms.</p><form id="createRoomForm">${field('Room name','newRoomName','','e.g. Daydream’s listening room')}${field('Description','newRoomDescription','','What happens here?')}${field('Tags','newRoomTags','music, hangout')}<button class="primary">Create room</button></form>`);
+      get('createRoomForm').onsubmit=e=>{e.preventDefault();const out=act('room',{name:get('newRoomName').value,description:get('newRoomDescription').value,tags:get('newRoomTags').value});if(out.ok)visitRoom(out.result.id);};
+    });
+  }
+  function artCard(type){
+    const c=Furniture.catalog[type],crop=c.cell<8?furnitureCrops[c.cell]:newCrops[c.cell-8],art=c.cell<8?furnitureImage:newArt;
+    const cv=document.createElement('canvas');cv.width=160;cv.height=125;cv.setAttribute('aria-hidden','true');
+    if(crop&&art.complete&&art.naturalWidth){const scale=Math.min(148/crop[2],115/crop[3]);cv.getContext('2d').drawImage(art,...crop,(160-crop[2]*scale)/2,120-crop[3]*scale,crop[2]*scale,crop[3]*scale);}
+    return cv;
+  }
+  const category=type=>['sofa','seat','table'].includes(type)?'lounge':['decks','speaker','records','jukebox'].includes(type)?'music':['vending','portal','dice','notice','bowl','gift'].includes(type)?'interactive':'decor';
+  function catalog(tab='shop',filter='all',query=''){
+    panel('Make it yours','FURNITURE & COLLECTING',topTabs([['shop','Catalog'],['owned','Inventory'],['discs','Records']],tab)+
+      (tab==='discs'?`<p>Your own music, pressed into keepsakes. Each disc costs 10 credits and preserves that version of the song.</p><div id="catalogCards" class="record-grid"></div>`:
+      `<div class="catalog-toolbar"><input id="catalogSearch" class="search-field" value="${h(query)}" placeholder="Search furniture…" aria-label="Search furniture"><select id="catalogCategory" aria-label="Furniture category">${[['all','Everything'],['lounge','Seating & tables'],['music','Music'],['interactive','Interactive'],['decor','Decor']].map(([value,name])=>`<option value="${value}" ${filter===value?'selected':''}>${name}</option>`).join('')}</select></div><p class="catalog-balance">${credit(game.state.coins)} available · ${game.state.items.length} pieces owned</p><div id="catalogCards" class="furniture-grid"></div>`),true);
+    buttons('[data-tab]',b=>catalog(b.dataset.tab));
+    if(tab==='discs'){
+      get('catalogCards').innerHTML=game.state.discs.length?game.state.discs.map(d=>`<article class="song-card"><span class="disc-icon">◉</span><h3>${h(d.song.title)}</h3><p>by ${h(d.artist)} · ${d.song.bpm} BPM</p><button class="soft-button" data-play-disc="${d.id}">▶ Play record</button></article>`).join(''):'<p>Your record shelf is empty. Save a song in the studio, then press it in your library.</p>';
+      buttons('[data-play-disc]',b=>playSong(game.state.discs.find(d=>d.id===b.dataset.playDisc).song));return;
+    }
+    const refresh=()=>catalog(tab,get('catalogCategory').value,get('catalogSearch').value);
+    get('catalogCategory').onchange=refresh;
+    get('catalogSearch').oninput=()=>{const p=get('catalogSearch').selectionStart;refresh();get('catalogSearch').focus();get('catalogSearch').setSelectionRange(p,p);};
+    const entries=tab==='shop'?Object.keys(Furniture.catalog).map(type=>({type})):game.state.items;
+    const filtered=entries.filter(i=>!i.wrapped&&(filter==='all'||category(i.type)===filter)&&Furniture.catalog[i.type].name.toLowerCase().includes(query.toLowerCase()));
+    if(!filtered.length)get('catalogCards').innerHTML='<p>No pieces match. Try another category.</p>';
+    filtered.forEach(item=>{
+      const c=Furniture.catalog[item.type],b=document.createElement('button');b.className='furniture-card';
+      const name=document.createElement('b');name.textContent=c.name;const detail=document.createElement('small');detail.textContent=tab==='shop'?c.price+' ✦':item.placed===false?'In inventory':(game.state.rooms.find(r=>r.id===item.roomId)?.name||'In room');
+      b.append(artCard(item.type),name,detail);b.onclick=()=>itemDetails(item.type,tab==='owned'?item.id:null);get('catalogCards').append(b);
+    });
+  }
+  const descriptions={
+    sofa:'Two seats for long conversations.',seat:'A little corner for a quiet moment.',table:'A warm glow and a place to gather.',decks:'Open the studio, make a track, and take it to the stage.',
+    speaker:'Play a song from your library in your room.',records:'Your collection of original music discs.',plant:'A little green. Water it and watch it glow.',lamp:'Switch the light on or off. Set the mood.',
+    jukebox:'Build a room playlist from your own songs.',vending:'Walk over, grab a soda, and enjoy it. Refills cost 2 credits.',portal:'Link this portal to one of your rooms.',dice:'Roll a six-sided die for your own room games.',notice:'Leave a note for your room.',bowl:'Feed and care for your companion.',gift:'Wrap an owned piece with a personal note. Open it later or gift it to a connected player.'
+  };
+  function itemDetails(type,id){
+    const item=game.state.items.find(i=>i.id===id),c=Furniture.catalog[type];
+    panel(c.name,'THE AFTERHOURS COLLECTION',`<div id="itemPreview" class="item-preview"></div><p>${h(descriptions[type])}</p><p>${c.w} × ${c.d} tiles · ${item?'Owned':credit(c.price)}</p><div class="button-row"><button id="itemPrimary" class="primary">${item?'Place / move piece':'Buy for '+c.price+' ✦'}</button>${item?'<button id="itemUse" class="soft-button">Interact</button>':''}<button id="backCatalog" class="soft-button">Back to catalog</button></div>`);
+    get('itemPreview').append(artCard(type));button('backCatalog',()=>catalog(item?'owned':'shop'));
+    button('itemPrimary',async()=>{
+      let owned=item;
+      if(!owned){const out=act('buy',{type},'Added to your collection.');if(!out.ok)return;owned=game.state.items.find(i=>i.id===out.result.id);}
+      const destination=owned.placed!==false?owned.roomId:activeRoomId;
+      if(window.AfterhoursOnline?.connected()){
+        if(!await window.AfterhoursOnline.visitOwnRoom(destination))return;
+      }else if(owned.placed!==false&&owned.roomId!==activeRoomId)visitRoom(owned.roomId);else if(!personal)visitRoom(activeRoomId);
+      sync();startEditing();close();selectFurniture(owned.id);toast('Choose a clear tile. R rotates; Esc cancels.');
+    });
+    button('itemUse',()=>{if(item.placed===false){notifyError('Place this piece in a room first.');return;}if(item.roomId!==activeRoomId||!personal)visitRoom(item.roomId);openObject(game.state.items.find(i=>i.id===id));});
+  }
+  showInventory=()=>catalog('owned');button('openInventory',showInventory);
+  function roomTools(){
+    if(window.AfterhoursOnline?.remoteRoom()){toast('Only the owner can change this room.');return;}
+    if(!personal){panel('Your room, your rules','ROOM TOOLS','<p>Visit one of your own rooms to edit its atmosphere, notes, playlists, and room rules.</p><button id="toolsGoHome" class="primary">Go to my room</button>');button('toolsGoHome',()=>visitRoom(activeRoomId));return;}
+    const r=room();
+    panel(r.name,'ROOM SETTINGS',`<form id="roomSettings">${field('Name','settingsName',r.name)}${field('Description','settingsDescription',r.description)}${field('Tags','settingsTags',r.tags)}
+      <div class="form-columns"><label class="form-field">Lighting<select id="roomLighting">${['amber','moonlight','rose','daylight','club'].map(v=>`<option ${r.lighting===v?'selected':''}>${v}</option>`).join('')}</select></label><label class="form-field">Door<select id="roomDoor">${['open','doorbell','private'].map(v=>`<option ${r.door===v?'selected':''}>${v}</option>`).join('')}</select></label></div><p class="small-note">Door settings apply to connected guests when running a shared session.</p><button class="primary">Save settings</button></form>
+      <div class="panel-section"><div class="button-row"><button id="blueprints" class="soft-button">Blueprints</button><button id="roomRules" class="soft-button">Room logic</button><button id="roomNotes" class="soft-button">Message board</button><button id="roomPlaylist" class="soft-button">Playlist</button><button id="roomEvent" class="soft-button">Host an event</button></div></div>`);
+    get('roomSettings').onsubmit=e=>{e.preventDefault();const out=act('roomSettings',{id:r.id,name:get('settingsName').value,description:get('settingsDescription').value,tags:get('settingsTags').value,lighting:get('roomLighting').value,door:get('roomDoor').value},'Room settings saved.');if(out.ok){get('roomTitle').textContent=room().name;close();}};
+    button('blueprints',blueprints);button('roomRules',rulesPanel);button('roomNotes',notesPanel);button('roomPlaylist',playlistPanel);button('roomEvent',eventPanel);
+  }
+  function blueprints(){
+    panel('Keep a room in your pocket','BLUEPRINTS',`<p>A blueprint remembers positions and lighting. Restoring moves your owned pieces back into place.</p><button class="primary" id="saveBlueprint">Save current layout</button><div class="directory-list">${game.state.blueprints.map(b=>`<div class="directory-room"><span><b>${h(b.name)}</b><small>${b.items.length} pieces</small></span><button class="soft-button" data-blueprint="${b.id}">Restore</button></div>`).join('')||'<p>No blueprints yet.</p>'}</div>`);
+    button('saveBlueprint',()=>{if(act('blueprint',{room:activeRoomId,name:room().name},'Blueprint saved.').ok)blueprints();});
+    buttons('[data-blueprint]',b=>{const bp=game.state.blueprints.find(x=>x.id===b.dataset.blueprint);if(act('restoreBlueprint',{id:bp.id},'Layout restored.').ok){visitRoom(bp.room);}});
+  }
+  function notesPanel(){
+    panel('Leave a little something','MESSAGE BOARD',`<form id="noteForm"><label class="form-field">Your note<textarea id="noteText" maxlength="180" placeholder="A message for this room…"></textarea></label><button class="primary">Pin note</button></form><div class="notes-grid">${room().notes.map(n=>`<article><p>${h(n.text)}</p><small>${h(n.name)}</small><button data-remove-note="${n.id}" aria-label="Remove note">×</button></article>`).join('')}</div>`);
+    get('noteForm').onsubmit=e=>{e.preventDefault();if(act('note',{room:activeRoomId,text:get('noteText').value}).ok)notesPanel();};
+    buttons('[data-remove-note]',b=>{act('deleteNote',{room:activeRoomId,id:b.dataset.removeNote});notesPanel();});
+  }
+  function rulesPanel(){
+    const r=room();r.rules||=[];
+    panel('Give your room a little magic','ROOM LOGIC',`<p>Connect an event to an effect. Rules run in this room while you are here.</p><form id="ruleForm"><div class="form-columns"><label class="form-field">When…<select id="ruleTrigger"><option value="enter">I enter the room</option><option value="say">I say a phrase</option><option value="sit">I take a seat</option><option value="dice">I roll the dice</option></select></label><label class="form-field">Then…<select id="ruleEffect"><option value="lights">Toggle the lights</option><option value="message">Show a message</option><option value="music">Play the room playlist</option></select></label></div>${field('Trigger phrase (for chat)','rulePhrase','','e.g. lights please')}${field('Message to show','ruleMessage','','Welcome to my studio')}<button class="primary">Add rule</button></form><div class="rule-list">${r.rules.map(rule=>`<div><span>When <b>${h(rule.trigger)}</b>${rule.phrase?' “'+h(rule.phrase)+'”':''} → <b>${h(rule.effect)}</b></span><button data-rule-delete="${rule.id}" aria-label="Remove rule">×</button></div>`).join('')}</div>`);
+    get('ruleForm').onsubmit=e=>{e.preventDefault();if(r.rules.length>=10){notifyError('This room can have ten rules.');return;}r.rules.push({id:G.uid(),trigger:get('ruleTrigger').value,effect:get('ruleEffect').value,phrase:get('rulePhrase').value.toLowerCase().trim(),message:get('ruleMessage').value.slice(0,120)});game.save();rulesPanel();};
+    buttons('[data-rule-delete]',b=>{r.rules=r.rules.filter(x=>x.id!==b.dataset.ruleDelete);game.save();rulesPanel();});
+  }
+  function runRules(trigger,value=''){
+    if(!personal)return;
+    for(const rule of room().rules||[]){
+      if(rule.trigger!==trigger||trigger==='say'&&rule.phrase!==value.toLowerCase().trim())continue;
+      if(rule.effect==='lights'){room().lighting=room().lighting==='moonlight'?'amber':'moonlight';game.save();}
+      if(rule.effect==='message')message('system',rule.message||'Welcome to '+room().name);
+      if(rule.effect==='music')startPlaylist();
+    }
+  }
+  function eventPanel(){
+    const r=room();panel('Bring the room together','HOST AN EVENT',`<p>Give tonight a purpose. Your event appears above the room, with a countdown and a host announcement.</p><form id="eventForm">${field('Event name','eventName',r.event?.name||'Listening party')}<label class="form-field">Starts in<select id="eventDelay"><option value="0">Right now</option><option value="5">5 minutes</option><option value="15">15 minutes</option><option value="30">30 minutes</option></select></label><button class="primary">Host event</button>${r.event?'<button type="button" class="soft-button" id="endEvent">End event</button>':''}</form>`);
+    get('eventForm').onsubmit=e=>{e.preventDefault();r.event={name:get('eventName').value.trim().slice(0,60)||'Listening party',start:Date.now()+Number(get('eventDelay').value)*60000};game.save();message('system',player.name+' is hosting '+r.event.name);close();};
+    button('endEvent',()=>{r.event=null;game.save();close();});
+  }
+  function playlistPanel(){
+    const r=room();panel('The room has a soundtrack','ROOM JUKEBOX',`<p>Select songs for this room. The jukebox plays them in order.</p><div class="playlist">${game.state.songs.length?game.state.songs.map(s=>`<label><input type="checkbox" value="${s.id}" ${r.playlist.includes(s.id)?'checked':''}><span>${h(s.title)}<small>${s.bpm} BPM · ${h(s.pack)}</small></span></label>`).join(''):'<p>Save your first track in the studio to build a playlist.</p>'}</div><button id="savePlaylist" class="primary">Save playlist</button> <button id="playPlaylist" class="soft-button">▶ Play playlist</button>`);
+    const save=()=>{r.playlist=Array.from(get('modalBody').querySelectorAll('.playlist input:checked')).map(i=>i.value);game.save();};
+    button('savePlaylist',()=>{save();toast('Playlist saved.');close();});button('playPlaylist',()=>{save();startPlaylist();});
+  }
+  let playlistTimer=null;
+  function startPlaylist(){
+    const list=room().playlist.map(id=>game.state.songs.find(s=>s.id===id)).filter(Boolean);
+    if(!list.length){toast('Add a song to this room’s playlist first.');return;}
+    let index=0;clearTimeout(playlistTimer);
+    const next=()=>{playSong(list[index%list.length]);const duration=list[index%list.length].length*60/list[index%list.length].bpm/4*4*1000;index++;playlistTimer=setTimeout(next,duration);};next();toast('Room playlist is playing.');
+  }
+  function rememberStudio(){studioHistory.push(copy(draft));if(studioHistory.length>40)studioHistory.shift();}
+  function saveDraft(){game.state.draft=copy(draft);game.save();if(music.running&&!stage)music.update(draft);}
+  studio=function(tab='editor'){
+    const s=game.state;
+    let body=topTabs([['editor','Studio'],['library','Song library']],tab);
+    if(tab==='editor'){
+      body+=`<div class="studio-header"><label class="form-field">Track name<input id="songName" maxlength="48" value="${h(draft.title)}" aria-label="Track name"></label><label class="form-field">Sound pack<select id="soundPack"><option value="velvet" ${draft.pack==='velvet'?'selected':''}>Velvet · warm & mellow</option><option value="club" ${draft.pack==='club'?'selected':''}>Club · bass & movement</option><option value="arcade" ${draft.pack==='arcade'?'selected':''}>Arcade · chiptune</option></select></label></div>
+        <div class="sequencer-scroll"><div class="sequencer-board"><div class="beat-ruler"><span>INSTRUMENT</span><div>${Array.from({length:draft.length},(_,i)=>`<span>${i%4===0?i/4+1:'·'}</span>`).join('')}</div></div>
+        ${['KICK','SNARE','HI-HAT','MELODY'].map((name,r)=>`<div class="seq-row"><div class="lane-label"><b>${name}</b><div><button data-mute="${r}" aria-label="Mute ${name}" aria-pressed="${draft.muted[r]}" class="${draft.muted[r]?'selected':''}">M</button><button data-solo="${r}" aria-label="Solo ${name}">S</button><input type="range" min="0" max="100" value="${Math.round(draft.volumes[r]*100)}" data-volume="${r}" aria-label="${name} volume"></div></div><div class="seq-steps" style="--steps:${draft.length}">${draft.pattern[r].map((v,c)=>`<button class="seq-step ${v?'on':''} ${c%4===0?'bar-start':''}" data-row="${r}" data-step="${c}" aria-label="${name} step ${c+1}" aria-pressed="${!!v}"></button>`).join('')}</div></div>`).join('')}</div></div>
+        <div class="studio-controls"><label>Tempo <input id="gameTempo" type="range" min="60" max="160" value="${draft.bpm}"><b id="tempoReadout">${draft.bpm}</b> BPM</label><select id="songLength" aria-label="Pattern length"><option value="16" ${draft.length===16?'selected':''}>1 bar · 16 steps</option><option value="32" ${draft.length===32?'selected':''}>2 bars · 32 steps</option></select><button id="studioUndo" class="soft-button" ${studioHistory.length?'':'disabled'}>↶ Undo</button><button id="clearSong" class="soft-button">Clear</button></div>
+        <div class="button-row studio-transport"><button id="gameStudioPlay" class="primary">${music.running?'Ⅱ Pause':'▶ Play'}</button><button id="gameSaveSong" class="primary">Save track</button><button id="newSong" class="soft-button">New track</button><button id="downloadSong" class="soft-button">Export WAV</button></div><p class="small-note">Four instruments, sixteen or thirty-two steps. M mutes a lane; S solos it. Every sound is synthesized here.</p>`;
+    }else{
+      body+=`<div class="library-header"><p>${s.songs.length} original tracks in your collection.</p><button id="libraryNew" class="soft-button">＋ New track</button></div><div class="record-grid">${s.songs.map(track=>`<article class="song-card"><div class="sleeve ${track.pack}"><span>AFTER<br>HOURS</span><i>◉</i></div><h3>${h(track.title)}</h3><p>${track.bpm} BPM · ${h(track.pack)} · ${track.length} steps</p><div class="button-row"><button class="soft-button" data-song-play="${track.id}">▶ Play</button><button class="soft-button" data-song-edit="${track.id}">Edit</button><button class="soft-button" data-song-stage="${track.id}">Perform</button><button class="soft-button" data-song-disc="${track.id}">Press disc · 10 ✦</button><button class="text-button" data-song-delete="${track.id}">Delete</button></div></article>`).join('')||'<div class="empty-state"><span>♫</span><h3>Your first record starts here.</h3><p>Make a loop in the studio, give it a name, and save it.</p></div>'}</div>`;
+    }
+    panel(tab==='editor'?'Find your sound':'Your discography','THE AFTERHOURS STUDIO',body,true);
+    buttons('[data-tab]',b=>studio(b.dataset.tab));
+    if(tab==='library'){
+      button('libraryNew',()=>{draft=G.song({pattern:G.starterPattern});studio();});
+      buttons('[data-song-play]',b=>playSong(s.songs.find(t=>t.id===b.dataset.songPlay)));
+      buttons('[data-song-edit]',b=>{draft=copy(s.songs.find(t=>t.id===b.dataset.songEdit));studioHistory=[];studio();});
+      buttons('[data-song-stage]',b=>queueSong(b.dataset.songStage));
+      buttons('[data-song-disc]',b=>{if(act('disc',{id:b.dataset.songDisc},'Pressed onto a collectible disc.').ok)studio('library');});
+      buttons('[data-song-delete]',b=>{
+        const track=s.songs.find(t=>t.id===b.dataset.songDelete);
+        panel('Delete this track?','SONG LIBRARY',`<p>Remove “${h(track.title)}” from your song library and playlists? Discs you already pressed keep their own copy.</p><button class="primary" id="confirmDeleteSong">Delete track</button> <button class="soft-button" id="cancelDeleteSong">Keep it</button>`);
+        button('confirmDeleteSong',()=>{act('deleteSong',{id:track.id});studio('library');});button('cancelDeleteSong',()=>studio('library'));
+      });return;
+    }
+    get('songName').oninput=e=>{draft.title=e.target.value;saveDraft();};
+    get('soundPack').onchange=e=>{rememberStudio();draft.pack=e.target.value;saveDraft();};
+    buttons('[data-step]',b=>{rememberStudio();const r=+b.dataset.row,c=+b.dataset.step;draft.pattern[r][c]=1-draft.pattern[r][c];b.classList.toggle('on',!!draft.pattern[r][c]);b.setAttribute('aria-pressed',!!draft.pattern[r][c]);get('studioUndo').disabled=false;saveDraft();});
+    buttons('[data-mute]',b=>{rememberStudio();const r=+b.dataset.mute;draft.muted[r]=!draft.muted[r];b.classList.toggle('selected',draft.muted[r]);b.setAttribute('aria-pressed',draft.muted[r]);saveDraft();});
+    buttons('[data-solo]',b=>{rememberStudio();const r=+b.dataset.solo,solo=draft.muted.every((v,i)=>v===(i!==r));draft.muted=draft.muted.map((_,i)=>solo?false:i!==r);saveDraft();studio();});
+    get('modalBody').querySelectorAll('[data-volume]').forEach(input=>input.oninput=()=>{draft.volumes[+input.dataset.volume]=+input.value/100;saveDraft();});
+    get('gameTempo').oninput=e=>{draft.bpm=+e.target.value;get('tempoReadout').textContent=draft.bpm;saveDraft();};
+    get('songLength').onchange=e=>{rememberStudio();draft.length=+e.target.value;draft.pattern=G.pattern(draft.pattern,draft.length);saveDraft();studio();};
+    button('studioUndo',()=>{if(studioHistory.length){draft=studioHistory.pop();saveDraft();studio();}});
+    button('clearSong',()=>{rememberStudio();draft.pattern=Array.from({length:4},()=>Array(draft.length).fill(0));saveDraft();studio();});
+    button('newSong',()=>{rememberStudio();draft=G.song({pattern:G.starterPattern,title:'Untitled afterhours'});saveDraft();studio();});
+    button('gameStudioPlay',()=>{if(stage){notifyError('Finish or leave your stage performance first.');return;}if(music.running)stopMusic();else playSong(draft);});
+    button('gameSaveSong',()=>{draft.title=get('songName').value;const out=act('song',draft,'Track saved to your library.');if(out.ok){draft=copy(out.result);studio('library');}});
+    button('downloadSong',async()=>{
+      const b=get('downloadSong');b.disabled=true;b.textContent='Rendering…';
+      try{const blob=await music.wav(draft);download(blob,(draft.title||'afterhours').replace(/[^a-z0-9 -]/gi,'').slice(0,48)+'.wav');toast('Your original track is ready.');}catch{notifyError('Audio export is unavailable in this browser.');}
+      if(b.isConnected){b.disabled=false;b.textContent='Export WAV';}
+    });
+  };
+  async function playSong(track){
+    if(stage&&stage.song.id!==track.id){toast('Leave the stage before changing the track.');return;}
+    try{
+      clearInterval(timer);audio=false;
+      await music.play(track,index=>{
+        document.querySelectorAll('.seq-step').forEach(b=>b.classList.toggle('current',+b.dataset.step===index));
+        $('.progress i').style.width=((index+1)/track.length*100)+'%';
+        const elapsed=Math.floor((Date.now()-music.started)/1000);get('playTime').textContent=Math.floor(elapsed/60)+':'+String(elapsed%60).padStart(2,'0');
+      });
+      get('trackTitle').textContent=track.title;$('.track p').textContent=game.state.profile.name+' · '+track.pack;document.body.classList.add('is-playing');syncAudioControls();
+    }catch{toast('Your browser could not start audio. Try the Play button again.');}
+  }
+  function stopMusic(){music.stop();clearTimeout(playlistTimer);document.body.classList.remove('is-playing');document.querySelectorAll('.seq-step.current').forEach(b=>b.classList.remove('current'));syncAudioControls();}
+  function syncAudioControls(){get('sound').textContent=music.running?'♫ Sound on':'♫ Sound off';get('play').textContent=music.running?'Ⅱ':'▶';if(get('gameStudioPlay'))get('gameStudioPlay').textContent=music.running?'Ⅱ Pause':'▶ Play';}
+  toggleSound=()=>music.running?stopMusic():playSong(draft);
+  button('sound',toggleSound);button('play',toggleSound);button('studioOpen',()=>studio());
+  function stagePanel(){
+    if(window.AfterhoursOnline?.connected())return window.AfterhoursOnline.stagePanel();
+    const s=game.state;
+    let body='<p>Play an original track for the room. Resident characters react to your performance. Finish a set to earn 40 credits and artist XP, up to five rewarded sets each day.</p>';
+    if(stage){
+      const remaining=Math.max(0,Math.ceil((stage.end-Date.now())/1000));
+      body+=`<div class="stage-now"><div class="stage-disc">◉</div><span class="eyebrow">${stage.started?'ON STAGE':'YOU’RE NEXT'}</span><h3>${h(stage.song.title)}</h3><p id="stageCountdown">${remaining}s ${stage.started?'remaining':'until your set'}</p><div class="mini-meter"><i id="stageProgress" style="width:0%"></i></div></div><button class="soft-button" id="leaveStage">Leave queue / stage</button>`;
+    }else{
+      body+=`<div class="stage-lineup"><span>01</span><div><b>Open mic · your slot is ready</b><p>One original track. Twenty seconds in the spotlight.</p></div><span>♫</span></div><div class="song-picker">${s.songs.map(t=>`<button data-queue-song="${t.id}"><span>◉</span><div><b>${h(t.title)}</b><small>${t.bpm} BPM · ${h(t.pack)}</small></div><em>Join stage ↗</em></button>`).join('')||'<div class="empty-state"><span>♫</span><h3>Something only you could make.</h3><p>Save a track in the studio, then come back for your debut.</p><button id="stageToStudio" class="primary">Make my first track</button></div>'}</div>`;
+    }
+    body+='<p class="small-note">Solo world: the audience is made up of resident characters. Shared sessions show real players separately.</p>';
+    panel('Your moment on Side B','THE LISTENING STAGE',body);
+    buttons('[data-queue-song]',b=>queueSong(b.dataset.queueSong));button('stageToStudio',()=>studio());
+    button('leaveStage',()=>{cancelStage();stagePanel();});
+  }
+  function queueSong(id){
+    if(window.AfterhoursOnline?.connected())return window.AfterhoursOnline.queueSong(id);
+    if(stage){toast('You are already in the stage queue.');stagePanel();return;}
+    const song=game.state.songs.find(t=>t.id===id);if(!song)return;
+    if(personal||roomIndex!==0)enterRoom(0,false);
+    stage={id:G.uid(),song:copy(song),queued:Date.now(),started:0,end:Date.now()+4000,applause:0};music.ensure().catch(()=>{});
+    stopMusic();message('system',player.name+' joined the stage queue with “'+song.title+'”.');stagePanel();
+    stageTimer=setInterval(tickStage,200);
+  }
+  function tickStage(){
+    if(!stage)return;
+    const now=Date.now();
+    if(!stage.started&&now>=stage.end){
+      stage.started=now;stage.end=now+20000;
+      playSong(stage.song);message('system',player.name+' is now performing “'+stage.song.title+'”.');
+      if(screen==='Your moment on Side B')stagePanel();
+    }
+    if(stage.started){
+      const elapsed=now-stage.started,count=Math.min(4,Math.floor(elapsed/4200));
+      if(count>stage.applause){stage.applause=count;const p=people[count-1];message(p.name,['this groove has a home here ♡','love the space in this one','saved you a spot on the dancefloor','play that again sometime'][count-1]);}
+      if(now>=stage.end){
+        const completed=stage;stage=null;clearInterval(stageTimer);stopMusic();
+        const out=act('performance',{id:completed.id,songId:completed.song.id,elapsed:now-completed.started});
+        message('system','Set complete. '+(out.ok&&out.result?'You earned '+out.result+' credits.':'Thanks for playing.'));
+        panel('You found your frequency','SET COMPLETE',`<div class="reward-hero"><span>✦</span><h3>${out.ok&&out.result?'+'+out.result+' credits':'Set complete'}</h3><p>“${h(completed.song.title)}” · ${completed.applause} resident reactions</p></div><div class="button-row"><button id="stageQuests" class="primary">Collect quest rewards</button><button id="stageAgain" class="soft-button">Back to the stage</button></div>`);
+        button('stageQuests',()=>journal());button('stageAgain',stagePanel);return;
+      }
+    }
+    if(get('stageCountdown'))get('stageCountdown').textContent=Math.max(0,Math.ceil((stage.end-now)/1000))+'s '+(stage.started?'remaining':'until your set');
+    if(get('stageProgress'))get('stageProgress').style.width=stage.started?(now-stage.started)/200+'%':'0%';
+  }
+  function cancelStage(){if(!stage)return;clearInterval(stageTimer);stage=null;stopMusic();toast('You left the stage. Your song is still saved.');}
+  function arcade(){
+    const cards=[['tiles','Tile Rush','Claim the floor. Keep more tiles than your rival.','45 seconds · keyboard or tap','▦'],['snow','Snow Jam','Dodge, aim, and land five snowball hits.','45 seconds · move + click','✧'],['quiz','Pop Quiz','Eight music questions. How well do you know your sound?','60 seconds · choose an answer','?']];
+    panel('Just one more round','AFTERHOURS ARCADE',`<p>Original games inspired by the social-game era. Play against a resident rival, set a personal best, and earn credits.</p><div class="arcade-games">${cards.map(([id,title,description,instructions,icon])=>`<article class="arcade-card ${id}"><span>${icon}</span><small>BEST ${game.state.best[id]||0}</small><h3>${title}</h3><p>${description}</p><em>${instructions}</em><button class="primary" data-game="${id}">Play ${title}</button></article>`).join('')}</div><p class="small-note">Up to eight rewarded rounds each day. Wins earn 30 credits; completed rounds earn 15.</p>`,true);
+    buttons('[data-game]',b=>startArcade(b.dataset.game));
+  }
+  function startArcade(kind){
+    const titles={tiles:'Tile Rush',snow:'Snow Jam',quiz:'Pop Quiz'},id=G.uid();
+    window.AfterhoursOnline?.arcadeStart(kind,id);
+    panel(titles[kind],'AFTERHOURS ARCADE','<div id="arcadeHost"></div>',true);
+    cleanupGame=AfterhoursArcade.start(kind,get('arcadeHost'),result=>{
+      cleanupGame=null;
+      const out=act('game',{...result,id});
+      panel(result.won?'That’s your game.':'One more round?','ARCADE RESULTS',`<div class="reward-hero"><span>${result.won?'★':'◇'}</span><h3>${h(result.detail)}</h3><p>${out.ok&&out.result?'+'+out.result+' credits · +20 XP':'Personal best saved. Daily rewards may be complete.'}</p></div><div class="button-row"><button class="primary" id="replayArcade">Play again</button><button class="soft-button" id="returnArcade">Back to arcade</button><button class="soft-button" id="arcadeJournal">Journal</button></div>`);
+      button('replayArcade',()=>startArcade(kind));button('returnArcade',arcade);button('arcadeJournal',()=>journal());
+    });
+  }
+  function resetPet(){
+    if(!game.state.pet){petPosition=null;petWalker=null;return;}
+    const nav=navigationOptions(),spawn=AfterhoursMovement.route(player,{x:player.x+1,y:player.y},nav)?.goal||{x:player.x,y:player.y};
+    petPosition={...spawn,name:game.state.pet.name};petWalker=new AfterhoursMovement.Walker(petPosition,navigationOptions);petWalker.maxSpeed=2.2;
+  }
+  function petPanel(){
+    const p=game.state.pet;
+    if(!p){
+      panel('A little company','ADOPT A COMPANION','<div class="pet-portrait" id="petPortrait"></div><p>Meet the orange tabby who always stays up late. Your companion follows you, learns tricks, and needs a little food and attention.</p><form id="adoptForm">'+field('Name your companion','petName','Biscuit')+'<button class="primary">Adopt · 50 ✦</button></form>');
+      drawPetPortrait();get('adoptForm').onsubmit=e=>{e.preventDefault();if(act('adopt',{name:get('petName').value},'Your new companion is here.').ok){resetPet();petPanel();}};return;
+    }
+    const n=G.needs(p);
+    panel(p.name,'YOUR COMPANION',`<div class="pet-portrait" id="petPortrait"></div><div class="pet-needs">${[['hunger','Full belly'],['happiness','Happiness'],['energy','Energy']].map(([key,name])=>`<div><label>${name}<b>${Math.round(n[key])}%</b></label><div class="mini-meter"><i style="width:${n[key]}%"></i></div></div>`).join('')}</div><div class="button-row"><button id="petFeed" class="primary">Feed · 3 ✦</button><button id="petPlay" class="soft-button">Play</button><button id="petTrain" class="soft-button">Train</button><button id="petFollow" class="soft-button">${p.following?'Stay here':'Follow me'}</button></div><p>Training XP: ${p.xp}. Learn Sit at 30 XP and Spin at 75 XP.</p><div class="button-row">${p.tricks.map(trick=>`<button class="soft-button" data-trick="${trick}">${trick==='sit'?'Sit':'Spin'} ↗</button>`).join('')}</div>`);
+    drawPetPortrait();
+    for(const [id,action]of[['petFeed','feed'],['petPlay','play'],['petTrain','train']])button(id,()=>{if(act('pet',{action},p.name+' enjoyed that.').ok){petPose=action==='play'?'spin':'sit';petPoseUntil=performance.now()+2200;petPanel();}});
+    button('petFollow',()=>{game.state.pet.following=!game.state.pet.following;game.save();petPanel();});
+    buttons('[data-trick]',b=>{petPose=b.dataset.trick;petPoseUntil=performance.now()+3500;close();toast(p.name+' does '+petPose+'.');});
+  }
+  function drawPetPortrait(){
+    const cv=document.createElement('canvas');cv.width=230;cv.height=160;if(newArt.complete&&newArt.naturalWidth){const c=newCrops[6],scale=Math.min(140/c[2],145/c[3]);cv.getContext('2d').drawImage(newArt,...c,(230-c[2]*scale)/2,150-c[3]*scale,c[2]*scale,c[3]*scale);}get('petPortrait').append(cv);
+  }
+  function approach(item,action){
+    close();standUp();const {w,d}=Furniture.footprint(item),options=navigationOptions(),targets=[];
+    for(let x=item.x-1;x<=item.x+w;x++)for(let y=item.y-1;y<=item.y+d;y++){
+      if(x>=item.x&&x<item.x+w&&y>=item.y&&y<item.y+d)continue;
+      const point={x:x+.5,y:y+.5};if(options.blocked.has(AfterhoursMovement.key(point)))continue;
+      const route=AfterhoursMovement.route(player,point,options);
+      if(route&&Math.hypot(route.goal.x-point.x,route.goal.y-point.y)<.01)targets.push({point,length:route.nodes.length});
+    }
+    targets.sort((a,b)=>a.length-b.length);
+    if(!targets.length){toast('Clear a tile beside this object so you can reach it.');return;}
+    heldKeys.clear();walker.goTo(targets[0].point);pendingUse={itemId:item.id,room:activeRoomId,action};toast('Walking to '+Furniture.catalog[item.type].name+'…');
+  }
+  function openObject(item){
+    if(!item)return;
+    const c=Furniture.catalog[item.type],actions=[];
+    if(['sofa','seat'].includes(item.type)){useSeat(roomSeats().filter(s=>s.itemId===item.id));close();return;}
+    const use=(label,fn)=>actions.push({label,fn});
+    if(item.type==='lamp'||item.type==='table')use(item.state===false?'Turn light on':'Turn light off',()=>{const out=act('itemAction',{id:item.id,action:'toggle'});if(out.ok)toast(out.result?'A warmer kind of night.':'Lights down.');});
+    if(item.type==='decks')use('Make a track',()=>studio());
+    if(item.type==='speaker'||item.type==='jukebox'){use('Choose room playlist',playlistPanel);use(music.running?'Stop music':'Play music',()=>music.running?stopMusic():startPlaylist());}
+    if(item.type==='records')use('Browse your records',()=>catalog('discs'));
+    if(item.type==='vending')use('Get a soda · 2 ✦',()=>{
+      if(!act('itemAction',{id:item.id,action:'soda'}).ok)return;
+      carried={kind:'soda',until:Date.now()+60000};toast('A cold soda. Click Drink to enjoy it.');get('drinkButton').hidden=false;
+    });
+    if(item.type==='plant')use('Water the palm',()=>{act('itemAction',{id:item.id,action:'water'},'A little care goes a long way.');});
+    if(item.type==='dice')use('Roll the dice',()=>{const out=act('itemAction',{id:item.id,action:'roll'});if(out.ok){player.bubble='Rolled a '+out.result;player.until=Date.now()+5000;message('system',player.name+' rolled '+out.result);runRules('dice',String(out.result));}});
+    if(item.type==='notice')use('Read / leave a note',notesPanel);
+    if(item.type==='bowl')use('Care for companion',petPanel);
+    if(item.type==='portal'){
+      if(item.destination)use('Step through portal',()=>{const dest=game.state.rooms.find(r=>r.id===item.destination);if(!dest){toast('Choose a destination first.');return;}visitRoom(dest.id);const exit=decor.find(d=>d.type==='portal'&&d.placed!==false);if(exit){const p=AfterhoursMovement.route(player,{x:exit.x+.5,y:exit.y+1.5},navigationOptions())?.goal;if(p)walker.reset(p.x,p.y);}toast('Arrived in '+dest.name);});
+      actions.push({label:'Link to a room',direct:true,fn:()=>{
+        panel('Where does this lead?','LINK A PORTAL',`<p>Choose one of your rooms. Add another portal there to create a return route.</p><div class="directory-list">${game.state.rooms.filter(r=>r.id!==activeRoomId).map(r=>`<button class="outline" data-portal-room="${r.id}">${h(r.name)} ↗</button>`).join('')||'<p>Create another room in the navigator first.</p>'}</div>`);
+        buttons('[data-portal-room]',b=>{if(act('itemAction',{id:item.id,action:'link',destination:b.dataset.portalRoom},'Portal linked.').ok)close();});
+      }});
+    }
+    if(item.type==='gift'){
+      if(item.contents)use('Open your gift',()=>{act('itemAction',{id:item.id,action:'unwrap'},'Your gift is in the inventory.');});
+      else actions.push({label:'Wrap a piece',direct:true,fn:()=>{
+        const options=game.state.items.filter(i=>i.id!==item.id&&i.placed===false&&!i.wrapped);
+        panel('A small surprise','WRAP A GIFT',`<p>Choose a piece from your inventory. It stays safely inside this box until opened.</p><select id="giftContents" class="search-field">${options.map(i=>`<option value="${i.id}">${h(Furniture.catalog[i.type].name)}</option>`).join('')}</select>${field('Personal note','giftNote','','Made me think of you.')}<button id="wrapGift" class="primary" ${options.length?'':'disabled'}>Wrap gift</button>`);
+        button('wrapGift',()=>{if(act('itemAction',{id:item.id,action:'wrap',content:get('giftContents').value,note:get('giftNote').value},'A little surprise, wrapped and ready.').ok)close();});
+      }});
+    }
+    panel(c.name,'ROOM INTERACTION',`<div id="objectPreview" class="item-preview"></div><p>${h(item.contents?item.note:descriptions[item.type])}</p><div class="button-row">${actions.map((a,i)=>`<button class="${i===0?'primary':'soft-button'}" data-object-action="${i}">${h(a.label)}</button>`).join('')}<button class="soft-button" id="objectMove">Move / rotate</button></div>`);
+    get('objectPreview').append(artCard(item.type));buttons('[data-object-action]',b=>{const a=actions[+b.dataset.objectAction];if(a.direct)a.fn();else approach(item,a.fn);});
+    button('objectMove',()=>{close();startEditing();selectFurniture(item.id);});
+  }
+  const drinkButton=document.createElement('button');drinkButton.id='drinkButton';drinkButton.hidden=true;drinkButton.textContent='Drink soda';$('.action-bar>div').append(drinkButton);
+  drinkButton.onclick=()=>{if(carried){carried=null;drinkButton.hidden=true;player.bubble='cheers ♡';player.until=Date.now()+3500;toast('Refreshing.');}};
+  const chatModes=document.createElement('div');chatModes.className='chat-modes';chatModes.innerHTML='<select id="chatMode" aria-label="Chat mode"><option value="say">Say</option><option value="shout">Shout</option><option value="whisper">Whisper</option></select><select id="whisperTarget" aria-label="Whisper to" hidden></select><button id="socialSettings" aria-label="Chat preferences">⚙</button>';
+  get('chatForm').before(chatModes);
+  get('chatMode').onchange=()=>{get('whisperTarget').hidden=get('chatMode').value!=='whisper';refreshWhispers();};
+  function refreshWhispers(){
+    const targets=(window.AfterhoursOnline?.peers()||[]).map(p=>({id:p.id,name:p.name})).concat(personal?[]:people.slice(0,rooms[roomIndex].count-1).map(p=>({id:p.name,name:p.name+' · resident'})));
+    get('whisperTarget').innerHTML=targets.map(p=>`<option value="${h(p.id)}">${h(p.name)}</option>`).join('');
+  }
+  const residentReplies={
+    miso:['That one belongs in a late-night set.','I’m always up for hearing something new.','There’s a stage slot with your name on it.'],
+    olive:['A plant, a record, a good chair. That’s a room.','The Greenhouse is my quiet corner.','Your room should feel like you.'],
+    tomo:['Try muting a lane. Sometimes less is the whole groove.','I’m working on a chiptune loop tonight.','Save that track. Press a disc. Make it yours.'],
+    'peach.wav':['Meet me at the diner after your set.','Have you tried the snowball game yet?','A little soda and a little conversation.'],
+    sunny:['There’s always another room to discover.','Cloud Nine is beautiful this time of night.','Good to see you around.']
+  };
+  let chatLog={},replyCount=0;
+  populateChat=function(){
+    get('messages').replaceChildren();message('system',personal?'Welcome to '+room().name+'.':'You stepped into '+rooms[roomIndex].title+'.');
+    (chatLog[roomKey()]||[]).forEach(m=>message(m.name,m.text));
+    if(!personal&&!chatLog[roomKey()]?.length){message('system','Resident characters are here to keep you company.');message(people[roomIndex%people.length].name,['The stage is open. Got something to play?','Coffee, records, conversation. Come on in.','Take a breath. Find a seat.','A little closer to the stars.'][roomIndex]);}
+  };
+  function logMessage(name,text){
+    const key=roomKey();chatLog[key]||=[];chatLog[key].push({name,text});chatLog[key]=chatLog[key].slice(-80);message(name,text);
+  }
+  get('chatForm').addEventListener('submit',e=>{
+    e.preventDefault();e.stopImmediatePropagation();
+    const input=get('chatInput'),value=input.value.trim();if(!value)return;input.value='';
+    const command=value.toLowerCase();
+    if(command===':wave'){get('wave').click();return;}if(command===':dance'){get('dance').click();return;}if(command===':stand'){standUp();return;}
+    let mode=get('chatMode').value,body=value;
+    if(value.startsWith(':shout ')){mode='shout';body=value.slice(7);}
+    if(mode==='whisper'&&!get('whisperTarget').value){toast('There is nobody here to whisper to yet.');return;}
+    game.event('chats');runRules('say',body);
+    const target=get('whisperTarget').value;
+    logMessage(player.name,(mode==='whisper'?'→ '+(get('whisperTarget').selectedOptions[0]?.textContent||target)+' · ':mode==='shout'?'SHOUT · ':'')+body);
+    if(mode!=='whisper'){player.bubble=body.length>38?body.slice(0,35)+'…':body;player.until=Date.now()+5000;}
+    window.AfterhoursOnline?.chat(body,mode,target);
+    if(!personal&&!game.state.settings.muteGuests&&mode!=='whisper'){
+      const key=roomKey(),speaker=people[replyCount++%(rooms[roomIndex].count-1)];
+      if(!game.state.blocked.includes(speaker.name))setTimeout(()=>{
+        if(roomKey()!==key)return;const replies=residentReplies[speaker.name];const response=replies[replyCount%replies.length];
+        logMessage(speaker.name,response);speaker.bubble=response.slice(0,40);speaker.until=Date.now()+4500;
+      },1500);
+    }
+  },true);
+  button('socialSettings',()=>{
+    panel('Make space for yourself','CHAT PREFERENCES',`<label class="setting-toggle"><input id="muteResidents" type="checkbox" ${game.state.settings.muteGuests?'checked':''}>Mute resident replies</label><p>Resident characters are part of the solo world. Real connected guests appear with a live indicator.</p><button id="saveChatPreferences" class="primary">Save preferences</button><div class="panel-section"><h3>Blocked residents</h3>${game.state.blocked.map(name=>`<button class="soft-button" data-unblock="${h(name)}">Unblock ${h(name)}</button>`).join('')||'<p>Nobody is blocked.</p>'}</div>`);
+    button('saveChatPreferences',()=>{game.state.settings.muteGuests=get('muteResidents').checked;game.save();close();});
+    buttons('[data-unblock]',b=>{game.state.blocked=game.state.blocked.filter(n=>n!==b.dataset.unblock);game.save();close();});
+  });
+  function residentProfile(person){
+    const friend=game.state.friends.includes(person.name),blocked=game.state.blocked.includes(person.name);
+    panel(person.name,'RESIDENT CHARACTER',`<p>${h(residentReplies[person.name][0])}</p><p>This resident is part of the solo world.</p><div class="button-row"><button class="primary" id="residentFriend">${friend?'Remove from circle':'Add to my circle'}</button><button class="soft-button" id="residentWhisper">Whisper</button><button class="soft-button" id="residentBlock">${blocked?'Unblock':'Block replies'}</button></div>`);
+    button('residentFriend',()=>{game.state.friends=friend?game.state.friends.filter(n=>n!==person.name):[...game.state.friends,person.name];game.save();residentProfile(person);});
+    button('residentWhisper',()=>{get('chatMode').value='whisper';refreshWhispers();get('whisperTarget').hidden=false;get('whisperTarget').value=person.name;close();get('chatInput').focus();});
+    button('residentBlock',()=>{game.state.blocked=blocked?game.state.blocked.filter(n=>n!==person.name):[...game.state.blocked,person.name];game.save();close();});
+  }
+  button('friendsTab',()=>{
+    panel('Good company','YOUR CIRCLE',`<p>Your resident circle lives on this device. Connected players appear below when you join a shared session.</p><div class="directory-list">${game.state.friends.map(name=>`<button class="directory-room" data-friend="${h(name)}"><span class="room-symbol">♡</span><span><b>${h(name)}</b><small>Resident character</small></span><em>View ↗</em></button>`).join('')||'<p>Click a resident in a room to add them to your circle.</p>'}</div><div id="onlineFriends"></div><button id="openSharedSession" class="primary">Shared sessions</button>`);
+    buttons('[data-friend]',b=>residentProfile(people.find(p=>p.name===b.dataset.friend)));
+    button('openSharedSession',()=>window.AfterhoursOnline?.panel());
+    window.AfterhoursOnline?.renderFriends(get('onlineFriends'));
+  });
+  button('roomTab',()=>populateChat());
+  canvas.addEventListener('pointerup',e=>{
+    if(editor.active||e.button!==0)return;
+    const p=scenePoint(e);
+    if(petPosition){const [x,y]=iso(petPosition.x,petPosition.y);if(Math.abs(p.x-x)<37&&p.y>y-65&&p.y<y+10){e.stopImmediatePropagation();petPanel();return;}}
+    if(personal){const hit=furnitureAt(e),item=hit&&decor.find(d=>d.id===hit.id);if(item&&!['sofa','seat'].includes(item.type)){e.stopImmediatePropagation();openObject(item);return;}}
+    if(!personal){const hit=people.slice(0,rooms[roomIndex].count-1).find(person=>{const [x,y]=iso(person.x,person.y);return Math.abs(p.x-x)<22&&p.y>y-115&&p.y<y;});if(hit){e.stopImmediatePropagation();residentProfile(hit);return;}}
+  },true);
+  const legacyDrawFurniture=drawFurniture;
+  drawFurniture=function(item,preview=false){
+    const c=Furniture.catalog[item.type];
+    if(c.cell<8){
+      ctx.save();if(item.state===false&&['lamp','table'].includes(item.type))ctx.filter='brightness(.45)';legacyDrawFurniture(item,preview);ctx.restore();
+      if(!preview&&item.state!==false&&['lamp','table'].includes(item.type)){const g=furnitureGeometry(item);ctx.save();ctx.globalCompositeOperation='screen';const light=ctx.createRadialGradient(g.x,g.y-g.h*.6,1,g.x,g.y-g.h*.6,60);light.addColorStop(0,'#ffaa3622');light.addColorStop(1,'#ffaa3600');ctx.fillStyle=light;ctx.fillRect(g.x-60,g.y-g.h*.6-60,120,120);ctx.restore();}
+      return;
+    }
+    if(!newArt.complete||!newArt.naturalWidth)return;
+    const crop=newCrops[c.cell-8],size=Furniture.footprint(item),[x]=iso(item.x+size.w/2,item.y+size.d/2),[,y]=iso(item.x+size.w,item.y+size.d),w=c.width,height=crop[3]/crop[2]*w;
+    ctx.save();if(preview)ctx.globalAlpha=.6;ctx.translate(x,y);if(item.rot)ctx.scale(-1,1);ctx.drawImage(newArt,...crop,-w/2,-height,w,height);ctx.restore();
+    if(!preview){furnitureBounds.push({id:item.id,x:x-w/2,y:y-height,w,h:height,depth:item.x+item.y+size.w+size.d});
+      if(item.type==='dice'&&item.value)label(String(item.value),x,y-height-9,18,'#f5edce');
+      if(item.type==='portal'&&item.destination)label('LINKED',x,y-height-10,10,'#dcb1ff');
+    }
+  };
+  function drawPet(t){
+    if(!petPosition||!game.state.pet||!newArt.complete||!newArt.naturalWidth)return;
+    const [x,y]=iso(petPosition.x,petPosition.y),c=newCrops[6],w=66,height=c[3]/c[2]*w;
+    ellipse(x,y,25,8,'#06060977');ctx.save();ctx.translate(x,y);
+    if(petPoseUntil>t&&petPose==='spin')ctx.scale(Math.cos((petPoseUntil-t)/180),1);
+    else if(petWalker.flip)ctx.scale(-1,1);
+    const bounce=petWalker.moving&&!reducedMotion?Math.sin(petWalker.phase)*2:0;
+    ctx.drawImage(newArt,...c,-w/2,-height+bounce,w,height);ctx.restore();label(game.state.pet.name,x,y+17,11,'#e5d3ae');
+    if(petPoseUntil>t&&petPose==='sit')label('♡',x,y-height-4,15,'#e2eda7');
+  }
+  let previousSeatMode=seating.mode;
+  window.GameHooks={
+    update(dt,t){
+      if(pendingUse&&!walker.moving&&!walker.path.length){
+        const pending=pendingUse;pendingUse=null;const item=decor.find(d=>d.id===pending.itemId&&d.placed!==false);
+        if(personal&&pending.room===activeRoomId&&item)pending.action();
+      }
+      if(previousSeatMode!==seating.mode){previousSeatMode=seating.mode;if(seating.mode==='sitting')runRules('sit');}
+      if(petWalker&&petPosition&&game.state.pet){
+        if(game.state.pet.following&&t>lastPetPath&&Math.hypot(player.x-petPosition.x,player.y-petPosition.y)>1.7){lastPetPath=t+800;petWalker.goTo({x:player.x+(player.x<7?1:-1),y:player.y});}
+        if(!editor.active)petWalker.update(dt);
+      }
+      if(carried&&Date.now()>carried.until){carried=null;drinkButton.hidden=true;}
+      if(t-lastHud>600){lastHud=t;
+        const event=personal?room().event:null,card=get('activityCard');
+        card.hidden=!stage&&!event;
+        if(stage)card.innerHTML=`<span class="live-dot"></span><b>${stage.started?'ON STAGE':'UP NEXT'}</b><span>${h(stage.song.title)}</span><em>${Math.max(0,Math.ceil((stage.end-Date.now())/1000))}s</em>`;
+        else if(event){const mins=Math.ceil((event.start-Date.now())/60000);card.innerHTML=`<span class="live-dot"></span><b>${mins>0?'STARTS IN '+mins+' MIN':'HAPPENING NOW'}</b><span>${h(event.name)}</span>`;}
+      }
+      window.AfterhoursOnline?.update(dt,t);
+    },
+    background(){
+      if(personal){
+        const color={moonlight:'#312b8544',rose:'#7f28542b',daylight:'#ffe4aa13',club:'#7b248b30'}[room().lighting];
+        if(color){ctx.fillStyle=color;ctx.fillRect(0,0,1500,1000);}
+      }
+    },
+    layers(layers,t){if(petPosition)layers.push({depth:petPosition.x+petPosition.y,draw:()=>drawPet(t)});window.AfterhoursOnline?.layers(layers,t);},
+    foreground(){
+      if(carried){const [x,y]=seating.mode==='sitting'?seating.target.offer.point:iso(player.x,player.y-0.0);ctx.save();ctx.translate(x+18,y-(seating.mode==='sitting'?22:65));ctx.fillStyle='#b8d4d0';ctx.fillRect(-4,-7,8,14);ctx.fillStyle='#e5e1bd';ctx.fillRect(-4,-8,8,3);ctx.restore();}
+    }
+  };
+  button('help',()=>panel('The night is yours','HOW TO PLAY',`<div class="help-grid"><article><b>01 · Make yourself at home</b><p>Click the floor to walk. Click seats to sit and other furniture to use it. Decorate moves and rotates your pieces.</p></article><article><b>02 · Find your sound</b><p>Make a track in Beat studio. Save it, perform on the stage, press a record, or export the audio.</p></article><article><b>03 · Earn your next thing</b><p>Check in daily, finish quests, play the arcade, and perform music. Collect your quest rewards in the Journal.</p></article><article><b>04 · Build your world</b><p>Create rooms, add usable objects, set up a playlist, leave notes, host events, and connect room logic.</p></article><article><b>05 · A little company</b><p>Adopt a cat, feed it, teach it tricks, and let it follow you. Click residents to open their profiles.</p></article><article><b>06 · Keep your progress</b><p>Your world saves automatically on this device. Export a backup from your profile. Shared sessions add real guests when the local game service is running.</p></article></div><p class="small-note">Keyboard: arrows/WASD move · 1 wave · 2 dance · Esc stand · R rotate while decorating. Chat: :wave, :dance, :stand, :shout.</p>`,true));
+  sync();resetPet();populateChat();syncFavorite();updateHUD();game.save();
+  if(loadError)toast(loadError);
+  // A narrow bridge for the optional multiplayer client, never for UI automation.
+  window.AfterhoursWorld={
+    game,saveWorld,sync,toast,panel,close,h,button,buttons,room,roomKey,visitRoom,enterRoom,player,walker,canvas,ctx,
+    getScene:()=>({personal,roomIndex,activeRoomId,decor,spriteIndex,seating,iso,roomSeats:roomSeats()}),
+    setRemoteChat:(name,text)=>logMessage(name,text),
+    spriteImage,backImage,seatedImage,seatedCrops,drawAvatarLabels,
+    setSeat:offers=>useSeat(offers),stand:()=>standUp(),navigationOptions,refreshWhispers,
+    openJournal:journal,download,stagePanel,playSong,stopMusic,
+    openCatalog:catalog,
+    updateHUD,showStudio:studio,
+    setActiveRoom:id=>{activeRoomId=id;game.state.activeRoom=id;},
+    applyState:state=>{game.state=state;activeRoomId=state.activeRoom||state.rooms[0].id;spriteIndex=state.profile.avatar||0;sync();draft=copy(state.draft);$('.profile-art').style.backgroundPosition=(-spriteIndex*35)+'px -4px';resetPet();}
+  };
+})();

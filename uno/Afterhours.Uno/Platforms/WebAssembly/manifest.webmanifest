@@ -1,0 +1,10 @@
+{
+  "background_color": "#14141b",
+  "description": "A social music world after dark.",
+  "display": "standalone",
+  "name": "Afterhours",
+  "short_name": "Afterhours",
+  "start_url": "/index.html",
+  "theme_color": "#14141b",
+  "scope": "/"
+}

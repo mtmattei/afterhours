@@ -1,0 +1,26 @@
+<Project>
+  <!-- Opt-in task loading compatibility. Identical packaged tasks run in-process. -->
+  <PropertyGroup>
+    <_AfterhoursUnoTasksAssembly>$(NuGetPackageRoot)/uno.winui/6.7.135/buildTransitive/Uno.UI.Tasks/Uno.UI.Tasks.da217df2312e9e39676880f9cb4b8d519cc297e0.dll</_AfterhoursUnoTasksAssembly>
+    <_AfterhoursWasmTasksAssembly>$(NuGetPackageRoot)/microsoft.net.sdk.webassembly.pack/10.0.11/tools/net10.0/Microsoft.NET.Sdk.WebAssembly.Pack.Tasks.dll</_AfterhoursWasmTasksAssembly>
+    <_AfterhoursMonoTasks>$(NetCoreRoot)/packs/Microsoft.NET.Runtime.MonoTargets.Sdk/10.0.11/tasks/net10.0/MonoTargetsTasks.dll</_AfterhoursMonoTasks>
+    <_AfterhoursAppTasks>$(NetCoreRoot)/packs/Microsoft.NET.Runtime.WebAssembly.Sdk/10.0.11/tasks/net10.0/WasmAppBuilder.dll</_AfterhoursAppTasks>
+  </PropertyGroup>
+  <UsingTask Condition="'$(AfterhoursUseInProcessUnoTasks)' == 'true'" TaskName="Uno.UI.Tasks.LinkerHintsGenerator.LinkerDefinitionMergerTask_da217df2312e9e39676880f9cb4b8d519cc297e0" AssemblyFile="$(_AfterhoursUnoTasksAssembly)" Override="true" />
+  <UsingTask Condition="'$(AfterhoursUseInProcessUnoTasks)' == 'true'" TaskName="Uno.UI.Tasks.LinkerHintsGenerator.LinkerHintGeneratorTask_da217df2312e9e39676880f9cb4b8d519cc297e0" AssemblyFile="$(_AfterhoursUnoTasksAssembly)" Override="true" />
+  <UsingTask Condition="'$(AfterhoursUseInProcessUnoTasks)' == 'true'" TaskName="Uno.UI.Tasks.LinkerHintsGenerator.LinkerDescriptorGeneratorTask_da217df2312e9e39676880f9cb4b8d519cc297e0" AssemblyFile="$(_AfterhoursUnoTasksAssembly)" Override="true" />
+  <UsingTask Condition="'$(AfterhoursUseInProcessUnoTasks)' == 'true'" TaskName="Uno.UI.Tasks.EmbeddedResourceInjector.EmbeddedResourceInjectorTask_da217df2312e9e39676880f9cb4b8d519cc297e0" AssemblyFile="$(_AfterhoursUnoTasksAssembly)" Override="true" />
+  <UsingTask Condition="'$(AfterhoursUseInProcessUnoTasks)' == 'true'" TaskName="Microsoft.NET.Sdk.WebAssembly.ComputeWasmBuildAssets" AssemblyFile="$(_AfterhoursWasmTasksAssembly)" Override="true" />
+  <UsingTask Condition="'$(AfterhoursUseInProcessUnoTasks)' == 'true'" TaskName="Microsoft.NET.Sdk.WebAssembly.ComputeWasmPublishAssets" AssemblyFile="$(_AfterhoursWasmTasksAssembly)" Override="true" />
+  <UsingTask Condition="'$(AfterhoursUseInProcessUnoTasks)' == 'true'" TaskName="Microsoft.NET.Sdk.WebAssembly.GenerateWasmBootJson" AssemblyFile="$(_AfterhoursWasmTasksAssembly)" Override="true" />
+  <UsingTask Condition="'$(AfterhoursUseInProcessUnoTasks)' == 'true'" TaskName="Microsoft.NET.Sdk.WebAssembly.ConvertDllsToWebCil" AssemblyFile="$(_AfterhoursWasmTasksAssembly)" Override="true" />
+  <UsingTask Condition="'$(AfterhoursUseInProcessUnoTasks)' == 'true'" TaskName="ComputeManagedAssemblies" AssemblyFile="$(NuGetPackageRoot)/microsoft.net.illink.tasks/10.0.11/tools/net/ILLink.Tasks.dll" Override="true" />
+  <UsingTask Condition="'$(AfterhoursUseInProcessUnoTasks)' == 'true'" TaskName="ILLink" AssemblyFile="$(NuGetPackageRoot)/microsoft.net.illink.tasks/10.0.11/tools/net/ILLink.Tasks.dll" Override="true" />
+  <UsingTask Condition="'$(AfterhoursUseInProcessUnoTasks)' == 'true'" TaskName="MonoTargetsTasks.MarshalingPInvokeScanner" AssemblyFile="$(_AfterhoursMonoTasks)" Override="true" />
+  <UsingTask Condition="'$(AfterhoursUseInProcessUnoTasks)' == 'true'" TaskName="EmitBundleObjectFiles" AssemblyFile="$(_AfterhoursMonoTasks)" Override="true" />
+  <UsingTask Condition="'$(AfterhoursUseInProcessUnoTasks)' == 'true'" TaskName="Microsoft.WebAssembly.Build.Tasks.WasmLoadAssembliesAndReferences" AssemblyFile="$(_AfterhoursAppTasks)" Override="true" />
+  <UsingTask Condition="'$(AfterhoursUseInProcessUnoTasks)' == 'true'" TaskName="Microsoft.WebAssembly.Build.Tasks.ManagedToNativeGenerator" AssemblyFile="$(_AfterhoursAppTasks)" Override="true" />
+  <UsingTask Condition="'$(AfterhoursUseInProcessUnoTasks)' == 'true'" TaskName="Microsoft.WebAssembly.Build.Tasks.EmccCompile" AssemblyFile="$(_AfterhoursAppTasks)" Override="true" />
+  <UsingTask Condition="'$(AfterhoursUseInProcessUnoTasks)' == 'true'" TaskName="Microsoft.WebAssembly.Build.Tasks.WasmCalculateInitialHeapSize" AssemblyFile="$(_AfterhoursAppTasks)" Override="true" />
+  <UsingTask Condition="'$(AfterhoursUseInProcessUnoTasks)' == 'true'" TaskName="Microsoft.WebAssembly.Build.Tasks.WasmAppBuilder" AssemblyFile="$(_AfterhoursAppTasks)" Override="true" />
+</Project>

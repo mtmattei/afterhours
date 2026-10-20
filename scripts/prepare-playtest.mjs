@@ -25,7 +25,7 @@ await cp(webroot,destination,{recursive:true,filter:source=>{
   const first=path.relative(webroot,source).split(path.sep)[0];
   return !first.startsWith('package_')||first===packageName;
 }});
-const config={url:supabase,publishableKey:args['publishable-key'],turnstileSiteKey:args['turnstile-site-key'],returnTo:'/'};
+const config={url:supabase,publishableKey:args['publishable-key'],turnstileSiteKey:args['turnstile-site-key'],returnTo:'/',googleInviteOnly:true};
 await writeFile(path.join(destination,'game/runtime-config.js'),
   `window.AFTERHOURS_API=${JSON.stringify(frontend)};\nwindow.AFTERHOURS_AUTH=${JSON.stringify(config)};\n`);
 await writeFile(path.join(destination,'_headers'),`/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: no-referrer\n/game/runtime-config.js\n  Cache-Control: no-store\n/game/account-callback.html\n  Cache-Control: no-store\n/game/account-callback.js\n  Cache-Control: no-store\n`);
@@ -35,7 +35,9 @@ for(const file of await readdir(destination,{recursive:true,withFileTypes:true})
 }
 await writeFile(path.join(root,'service/wrangler.json'),JSON.stringify({
   $schema:'../node_modules/wrangler/config-schema.json',
-  name:'afterhours-playtest',main:'dist/server/index.js',compatibility_date:'2026-10-20',
+  name:'afterhours-playtest',main:'worker/cloudflare.mjs',compatibility_date:'2026-10-20',
+  durable_objects:{bindings:[{name:'WORLD',class_name:'SharedWorld'}]},
+  migrations:[{tag:'v1-world-coordinator',new_sqlite_classes:['SharedWorld']}],
   assets:{directory:path.relative(path.join(root,'service'),destination).replaceAll('\\','/'),binding:'ASSETS',run_worker_first:['/api/*']},
   vars:{FRONTEND_ORIGIN:frontend,SUPABASE_URL:supabase,PUBLIC_PLAYTEST:'true',MAX_ONLINE:'5',MAX_CHARACTERS:'100',MAX_DAILY_REQUESTS:'12000'},
   d1_databases:[{binding:'DB',database_name:'afterhours-playtest',database_id:args['database-id'],migrations_dir:'drizzle'}]

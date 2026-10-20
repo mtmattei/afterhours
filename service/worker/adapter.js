@@ -9,12 +9,10 @@ function admit(db,id,env){
 }
 async function dailyBudget(DB,maximum){
   const day=Math.floor(Date.now()/86400000),key='daily-budget';
-  const current=await DB.prepare('SELECT window,count FROM request_limits WHERE id=?').bind(key).first();
-  if(current?.window===day&&current.count>=maximum)throw fault('Today’s free playtest allowance is used up. Saved progress is safe. Please return after midnight UTC.',429);
   const row=await DB.prepare(`INSERT INTO request_limits(id,window,count) VALUES(?,?,1)
     ON CONFLICT(id) DO UPDATE SET count=CASE WHEN window=excluded.window THEN count+1 ELSE 1 END,
-    window=excluded.window RETURNING count`).bind(key,day).first();
-  if(row.count>maximum)throw fault('Today’s free playtest allowance is used up. Saved progress is safe. Please return after midnight UTC.',429);
+    window=excluded.window WHERE window<>excluded.window OR count<? RETURNING count`).bind(key,day,maximum).first();
+  if(!row)throw fault('Today’s free playtest allowance is used up. Saved progress is safe. Please return after midnight UTC.',429);
 }
 const developmentOrigins=new Set([
   'http://127.0.0.1:4176','http://localhost:4176'
@@ -35,15 +33,21 @@ async function limit(DB,key,max){
   if(row.count>max)throw fault('Too many requests. Please wait a moment.',429);
 }
 async function transact(DB,work){
-  await DB.prepare('INSERT OR IGNORE INTO world_state(id,revision,body) VALUES(?,?,?)').bind('main',0,JSON.stringify(initialWorld())).run();
-  for(let attempt=0;attempt<6;attempt++){
-    const row=await DB.prepare('SELECT revision,body FROM world_state WHERE id=?').bind('main').first();
+  for(let attempt=0;attempt<12;attempt++){
+    let row=await DB.prepare('SELECT revision,body FROM world_state WHERE id=?').bind('main').first();
+    if(!row){
+      await DB.prepare('INSERT OR IGNORE INTO world_state(id,revision,body) VALUES(?,?,?)').bind('main',0,JSON.stringify(initialWorld())).run();
+      row=await DB.prepare('SELECT revision,body FROM world_state WHERE id=?').bind('main').first();
+    }
     const db=JSON.parse(row.body),out=await work(db);
     const body=JSON.stringify(db);
     if(new TextEncoder().encode(body).byteLength>1700000)throw Error('The playtest world is full. Please contact the host.');
     const saved=await DB.prepare('UPDATE world_state SET revision=?,body=? WHERE id=? AND revision=?')
       .bind(row.revision+1,body,'main',row.revision).run();
-    if(saved.meta.changes===1)return out;
+    if(saved.meta.changes===1)return typeof out==='function'?out():out;
+    // Spread competing writers out instead of repeatedly retrying in lockstep.
+    // Build the response snapshot only after a successful commit.
+    await new Promise(resolve=>setTimeout(resolve,Math.random()*Math.min(200,20*2**attempt)));
   }
   throw Error('The room is busy. Please try again.');
 }
@@ -89,7 +93,7 @@ export default {
             const id=db.identities[identity.id];
             if(id&&db.users[id]){
               admit(db,id,env);db.users[id].lastSeen=Date.now();tick(db);
-              return {id,snapshot:snapshot(db,db.users[id]),account:{anonymous:identity.anonymous}};
+              return ()=>({id,snapshot:snapshot(db,db.users[id]),account:{anonymous:identity.anonymous}});
             }
           }
           admit(db,null,env);
@@ -98,9 +102,9 @@ export default {
           if(identity){
             db.identities[identity.id]=guest.id;
             delete db.auth[await hash(guest.token)];
-            return {id:guest.id,snapshot:snapshot(db,db.users[guest.id]),account:{anonymous:identity.anonymous}};
+            return ()=>({id:guest.id,snapshot:snapshot(db,db.users[guest.id]),account:{anonymous:identity.anonymous}});
           }
-          return {...guest,snapshot:snapshot(db,db.users[guest.id])};
+          return ()=>({...guest,snapshot:snapshot(db,db.users[guest.id])});
         });return response(result,200,origin);
       }
       if(!['/api/state','/api/action'].includes(url.pathname))return response({error:'Not found.'},404,origin);
@@ -110,10 +114,10 @@ export default {
         const user=identity?db.users[db.identities?.[identity.id]]:await authenticate(db,token);
         if(!user)throw fault('Join the shared world to set up this account’s character.',404);
         admit(db,user.id,env);user.lastSeen=Date.now();tick(db);
-        if(url.pathname==='/api/state'&&request.method==='GET')return snapshot(db,user);
+        if(url.pathname==='/api/state'&&request.method==='GET')return ()=>snapshot(db,user);
         if(url.pathname==='/api/action'&&request.method==='POST'){
           const result=action(db,user,input.type,input.payload);
-          return {result,snapshot:snapshot(db,user)};
+          return ()=>({result,snapshot:snapshot(db,user)});
         }
         throw Error('Method not allowed.');
       });return response(result,200,origin);

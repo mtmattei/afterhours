@@ -8,5 +8,11 @@
     storage.setItem('afterhours-online-token',result.token);
     return result;
   }
-  return {resumeOrCreate};
+  function syncKind({now,lastResponse,lastPose,poseChanged,peers,busy,hidden,paused}) {
+    if(busy||hidden||paused)return null;
+    if(poseChanged&&now-lastPose>=250)return 'pose';
+    if(now-lastResponse>=(peers?1500:4000))return 'state';
+    return null;
+  }
+  return {resumeOrCreate,syncKind};
 });

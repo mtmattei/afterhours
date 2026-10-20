@@ -56,6 +56,13 @@ export function createAccounts(auth, storage, navigate, callbackUrl, withEntryLo
     storage.setItem('afterhours-account-resume', '1');
     storage.removeItem('afterhours-account-flow');
   }
+  async function signOut() {
+    const value = await session();
+    if (value?.user.is_anonymous) throw Error('Link Google before signing out so you can recover this character.');
+    const {error} = await auth.signOut({scope: 'local'});
+    if (error) throw error;
+    for (const key of [marker, 'afterhours-account-flow', 'afterhours-account-resume']) storage.removeItem(key);
+  }
   return {enter: captcha => withEntryLock(() => enter(captcha)), token, current, link: () => redirect('link'), restore: () => redirect('restore'), finish,
-    remembered: () => !!storage.getItem(marker)};
+    signOut: () => withEntryLock(signOut), remembered: () => !!storage.getItem(marker)};
 }

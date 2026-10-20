@@ -4,7 +4,7 @@ import {createRequire} from 'node:module';
 import {generateKeyPair, exportJWK, createLocalJWKSet, SignJWT} from 'jose';
 import {verifyIdentity} from '../service/worker/identity.mjs';
 import {createAccounts} from '../client/accounts-core.mjs';
-const {resumeOrCreate} = createRequire(import.meta.url)('../dist/online-session.js');
+const {resumeOrCreate,syncKind} = createRequire(import.meta.url)('../dist/online-session.js');
 const memory = () => {
   const data = new Map();
   return {getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value), removeItem: key => data.delete(key)};
@@ -96,4 +96,42 @@ test('server verifies signed identity, expiry, issuer, audience and role', async
   const other = await generateKeyPair('ES256');
   const forged = await new SignJWT({sub: id}).setProtectedHeader({alg: 'ES256', kid: 'test'}).sign(other.privateKey);
   await assert.rejects(verifyIdentity(forged, 'https://project.supabase.co', keys));
+});
+
+test('local sign-out refuses an unlinked guest and keeps recovery markers if the provider fails',async()=>{
+  const store=memory();store.setItem('afterhours-account-id',id);
+  let value=session(),calls=0;
+  const auth={getSession:async()=>({data:{session:value}}),signOut:async options=>{
+    calls++;assert.deepEqual(options,{scope:'local'});return {error:Error('offline')};
+  }};
+  const account=createAccounts(auth,store);
+  await assert.rejects(account.signOut(),/Link Google/);assert.equal(calls,0);
+  value=session(false);await assert.rejects(account.signOut(),/offline/);
+  assert.equal(store.getItem('afterhours-account-id'),id);
+});
+
+test('signed-out recovery starts without a session or account marker and returns the linked identity',async()=>{
+  const store=memory();let value=session(false),created=0;
+  store.setItem('solo-save','keep');
+  const auth={getSession:async()=>({data:{session:value}}),
+    signOut:async()=>{value=null;return {};},
+    signInAnonymously:async()=>{created++;throw Error('Must not create a guest');},
+    signInWithOAuth:async()=>({data:{url:'https://accounts.google.com/'}}),
+    exchangeCodeForSession:async()=>{value=session(false);return {data:{session:value}};}};
+  const account=createAccounts(auth,store,()=>{},'https://play.example.test/game/account-callback.html');
+  await account.enter();await account.signOut();
+  assert.equal(await account.current(),null);assert.equal(account.remembered(),false);
+  await account.restore();await account.finish('?code=new-device-code');
+  assert.equal(await account.enter(),'access');assert.equal(store.getItem('afterhours-account-id'),id);
+  assert.equal(created,0);assert.equal(store.getItem('solo-save'),'keep');
+});
+
+test('room sync avoids redundant polls, keeps movement updates and quiets hidden or paused clients',()=>{
+  const base={now:10000,lastResponse:9500,lastPose:9400,poseChanged:false,peers:4};
+  assert.equal(syncKind(base),null);
+  assert.equal(syncKind({...base,poseChanged:true}),'pose');
+  assert.equal(syncKind({...base,lastResponse:8500}),'state');
+  assert.equal(syncKind({...base,lastResponse:8500,peers:0}),null);
+  assert.equal(syncKind({...base,lastResponse:6000,peers:0}),'state');
+  for(const flag of ['busy','hidden','paused'])assert.equal(syncKind({...base,poseChanged:true,[flag]:true}),null);
 });

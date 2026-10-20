@@ -2,7 +2,7 @@
   'use strict';
   const W=window.AfterhoursWorld,G=AfterhoursGame,base=window.AFTERHOURS_API||(location.protocol.startsWith('http')?location.origin:'');
   const get=id=>document.getElementById(id),h=W.h;
-  let ready=false,online=false,token='',state=null,solo=null,remote=null,applying=false,joining=false,lastPose=0,lastPoll=0,polling=false,lastGameRevision=-1,managed=false,account=null,retryAfter=0;
+  let ready=false,online=false,token='',state=null,solo=null,remote=null,applying=false,joining=false,lastPose=0,lastResponse=0,polling=false,lastGameRevision=-1,managed=false,account=null,retryAfter=0;
   let requestChain=Promise.resolve(),pending=0,lastChatIds=new Set(),seenNotifications=new Set(),rendered=new Map(),extrasTimer=null,lastTradeStatus='',lastStage='',listen=false,networkErrors=0;
   let rosterSignature='',friendsSignature='',stageSignature='',poseSignature='';
   const sharedMusic=new AfterhoursMusic(),originalDispatch=W.game.dispatch.bind(W.game),originalSave=W.game.save.bind(W.game),oldEnter=enterRoom,oldSeat=useSeat,oldStand=standUp,oldEditing=startEditing;
@@ -13,7 +13,7 @@
     const json=await response.json();if(!response.ok){
       if(response.status===429||response.status===503){retryAfter=Date.now()+60000;get('connectionLabel').textContent='PLAYTEST PAUSED';}
       throw Object.assign(Error(json.error||'The shared world could not be reached.'),{status:response.status});
-    }return json;
+    }if(auth)lastResponse=performance.now();return json;
   }
   function send(type,payload={},quiet=false){
     pending++;
@@ -96,6 +96,7 @@
         get('joinWorldForm').querySelector('button').textContent=window.AfterhoursAccount?.remembered()?'Continue my character':'Play as a guest';
         get('joinWorldForm').insertAdjacentHTML('beforeend','<div id="accountChallenge"></div>');
         get('joinWorldForm').nextElementSibling.innerHTML='Your progress saves to the shared world. Link Google after joining to recover it on another device. An unlinked guest depends on this browser.<br><button class="soft-button" id="restoreAccount">Restore account with Google</button>';
+        if(window.AFTERHOURS_AUTH?.googleInviteOnly)get('restoreAccount').insertAdjacentHTML('beforebegin','<p>Google recovery is invite-only during this playtest. Ask the host to add your Google email before linking. Keep this browser’s data to return as a guest.</p>');
         W.button('restoreAccount',restorePanel);
       }
       get('joinWorldForm').onsubmit=async e=>{
@@ -111,6 +112,19 @@
     if(managed){
       get('sharedGuestList').insertAdjacentHTML('beforebegin',`<div class="session-banner account-status"><b>${account?.anonymous?'Keep your place.':'Your character is linked.'}</b><p>${account?.anonymous?'Link Google to bring your rooms, tracks, and furniture with you on another device.':'Sign in with the same Google account to recover your saved progress.'}</p>${account?.anonymous?'<button class="primary" id="linkAccount">Link Google account</button>':''}</div>`);
       W.button('linkAccount',()=>window.AfterhoursAccount.link().catch(error=>W.toast(error.message)));
+      if(account?.anonymous&&window.AFTERHOURS_AUTH?.googleInviteOnly)get('linkAccount').insertAdjacentHTML('beforebegin','<p>Ask the host to add your Google email to the private playtest before linking.</p>');
+      if(!account?.anonymous){
+        get('leaveOnline').insertAdjacentHTML('afterend','<button class="soft-button" id="signOutAccount">Sign out on this device</button>');
+        W.button('signOutAccount',()=>{
+          W.panel('Your place is saved.','SIGN OUT','<p>Your rooms, furniture and tracks stay saved. Use Restore account with Google when you return. This signs out only this device.</p><button class="primary" id="confirmSignOut">Sign out</button><button class="soft-button" id="cancelSignOut">Stay here</button>');
+          W.button('cancelSignOut',panel);
+          W.button('confirmSignOut',async()=>{
+            const button=get('confirmSignOut');button.disabled=true;
+            try{await window.AfterhoursAccount.signOut();disconnect();token='';account=null;W.toast('Signed out. Restore with Google to continue your saved character.');}
+            catch(error){button.disabled=false;W.toast(error.message);}
+          });
+        });
+      }
     }
     W.button('sharedRooms',roomDirectory);W.button('sharedStageOpen',stagePanel);W.button('sharedFriendsOpen',friendsPanel);W.button('leaveOnline',disconnect);renderGuests();
   }
@@ -279,12 +293,13 @@
     update(dt,t){
       if(!online||Date.now()<retryAfter||document.hidden)return;
       for(const peer of state?.peers||[]){let p=rendered.get(peer.id);if(!p){p={x:peer.pose.x,y:peer.pose.y};rendered.set(peer.id,p);}const k=1-Math.exp(-dt*12);p.x+=(peer.pose.x-p.x)*k;p.y+=(peer.pose.y-p.y)*k;}
-      if(t-lastPose>250&&!pending&&!joining){
-        const scene=W.getScene(),pose={x:W.player.x,y:W.player.y,back:W.walker.back,flip:W.walker.flip,dancing,avatar:scene.spriteIndex,seated:scene.seating.mode==='sitting'},key=JSON.stringify(pose);
-        if(key!==poseSignature||t-lastPose>5000){lastPose=t;poseSignature=key;send('pose',pose,true).catch(()=>{});}
-      }
-      if(t-lastPoll>1000&&!polling&&!pending){
-        lastPoll=t;polling=true;request('/api/state').then(next=>{networkErrors=0;apply(next);}).catch(()=>{networkErrors++;get('connectionLabel').textContent='RECONNECTING…';}).finally(()=>polling=false);
+      const scene=W.getScene(),pose={x:W.player.x,y:W.player.y,back:W.walker.back,flip:W.walker.flip,dancing,avatar:scene.spriteIndex,seated:scene.seating.mode==='sitting'},key=JSON.stringify(pose);
+      const sync=AfterhoursSession.syncKind({now:t,lastResponse,lastPose,poseChanged:key!==poseSignature,peers:state?.peers.length,busy:pending||joining||polling,hidden:document.hidden,paused:Date.now()<retryAfter});
+      if(sync==='pose'){lastPose=t;poseSignature=key;send('pose',pose,true).catch(()=>{});}
+      else if(sync==='state'){
+        polling=true;request('/api/state').then(next=>{networkErrors=0;apply(next);}).catch(error=>{
+          networkErrors++;if(![429,503].includes(error.status)){retryAfter=Date.now()+Math.min(15000,1000*2**Math.min(networkErrors,4));get('connectionLabel').textContent='RECONNECTING…';}
+        }).finally(()=>polling=false);
       }
       if(get('sharedStage')&&state?.stage){const el=get('sharedStage').querySelector('.stage-now>p');if(el)el.textContent='by '+state.stage.artist+' · '+Math.max(0,Math.ceil((state.stage.end-Date.now())/1000))+'s remaining';}
     },

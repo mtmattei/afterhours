@@ -1,0 +1,71 @@
+{
+  "ok": true,
+  "checks": [
+    "invalid and expired identities rejected",
+    "100-character admission cap",
+    "five concurrent players; sixth refused",
+    "new signed session retains character",
+    "concurrent purchases retain every item and balance",
+    "exclusive seat ownership",
+    "whisper privacy",
+    "friend request acceptance",
+    "two-party trade, replay protection and persistent ownership",
+    "five-client sustained motion and state load",
+    "shared performance reward exactly once"
+  ],
+  "seedCharacters": 100,
+  "concurrentClients": 5,
+  "durationSeconds": 60,
+  "loadRequests": 346,
+  "totalRequests": 387,
+  "networkResets": 0,
+  "latencyMs": {
+    "p50": 817,
+    "p95": 1193,
+    "p99": 1283,
+    "max": 1289
+  },
+  "rowsRead": 2302,
+  "rowsWritten": 1161,
+  "queries": 1538,
+  "maxQueries": 4,
+  "statuses": {
+    "200": 381,
+    "400": 2,
+    "401": 2,
+    "503": 2
+  },
+  "date": "2026-10-20",
+  "scope": "isolated remote Cloudflare Worker + SQLite Durable Object coordinator + D1",
+  "worldBytesAtSeed": 262905,
+  "automatedTestsPassed": 50,
+  "dailyCap": {
+    "httpStatus": 429,
+    "worldUnchanged": true,
+    "sameCharacterAfterResume": true
+  },
+  "remoteBackupRestoreExactMatch": true,
+  "signedOutGoogleRecovery": {
+    "sameBrowser": true,
+    "sameAccountMapping": true,
+    "completeGameUnchanged": true,
+    "physicalSecondDeviceTested": false
+  },
+  "workerCpuSampleMs": {
+    "p50": 0.87,
+    "p90": 1.35,
+    "p99": 2.1
+  },
+  "limits": {
+    "maxOnline": 5,
+    "maxCharacters": 100,
+    "dailyApiRequests": 12000
+  },
+  "notes": [
+    "HTTP 400/401/503 responses are expected negative checks; every load response was 200.",
+    "Provider CPU chart is a delayed sample, not a full-run CPU trace.",
+    "An earlier uncoordinated run failed on save contention; the coordinator fixes it.",
+    "A local connection reset interrupted an intermediate run; the final run had none.",
+    "Private database contents and test credentials are excluded."
+  ]
+}

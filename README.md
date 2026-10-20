@@ -8,10 +8,11 @@ and make a room your own.
 Original generated artwork and synthesized music; no original game assets are included.
 
 The [limited free playtest](https://afterhours-playtest.matthewtmattei.workers.dev/)
-now runs the compiled Uno app with server saves. Guest entry and save continuity
-are verified, including Google linking and restoration in the current browser.
-Keep this to an operator test while the remaining
-[live acceptance checks](PLAYTEST-SETUP.md) are completed.
+runs the compiled Uno app with server saves, verified Google recovery after
+sign-out, and a tested five-player limit. Friends can enter as guests now;
+Google linking needs their email added to the private test audience first.
+The daily allowance pauses shared play safely when exhausted. Start with a
+supervised 10–20 minute group session. See [joining and test results](PLAYTEST-SETUP.md).
 
 ## Play locally
 

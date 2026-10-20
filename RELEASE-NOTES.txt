@@ -1,34 +1,38 @@
-UNRELEASED — FREE PLAYTEST DEPLOYMENT
+UNRELEASED — FREE FRIENDS PLAYTEST
+20 October 2026
 
-20 October 2026: the compiled Uno app and shared service are deployed at
-https://afterhours-playtest.matthewtmattei.workers.dev/
-Cloudflare Workers/D1 and Supabase remain on Free plans. Google sign-in is
-enabled using a dedicated web client and the exact Supabase callback. Its secret
-is stored only in Supabase. The Google app remains in Testing with the owner
-added. Consent, guest linking and the separate Restore account flow completed
-in the current browser. Server comparison against the pre-link backup confirms
-the account mapping and complete saved game stayed unchanged. Recovery from a
-fresh browser/device remains unverified. This is an operator test.
+Play: https://afterhours-playtest.matthewtmattei.workers.dev/
+Compiled Uno WebAssembly client, shared saves and guest entry are live on Free
+plans. Five connected players, 100 characters, a 1.7 MB world and 12,000 API
+requests per UTC day bound this supervised playtest. No paid plan was enabled.
+Friends can play as guests; Google linking remains invite-only in Testing.
+The owner deferred adding friends' Google emails. The game explains this limit.
 
-Guest-first Supabase authentication with Google linking/recovery; signed server
-identity verification; D1 saves retain the same character after account linking.
-The client never replaces a remembered guest after a connection failure.
-Five connected players, 100 characters, a 1.7 MB world and 12,000 API requests
-per UTC day bound the initial free test. Exhaustion pauses access, keeping saves.
-A preparation script packages the compiled Uno app and API for Cloudflare;
-PLAYTEST-SETUP.md covers configuration, deployment and private backup rehearsal.
+RECOVERY
+Added Sign out on this device for linked accounts. Unlinked guests are protected
+from accidental sign-out. Verified full sign-out, reload and Google restore on
+the deployed app: the original account mapping, character, wallet, nine items,
+room and song stayed unchanged. Separate physical devices remain untested.
+Private backups restored exactly into isolated local and remote D1 databases.
+Supabase identity recovery is separate from game database recovery.
 
-Validation: 44 Node test cases, including signed identity/expiry checks,
-account-link continuity, foreign-account isolation, transient failure recovery,
-request limits and concurrent SQLite transactions. Account screens were checked
-in a local browser fixture. Live checks now confirm protected guest signup,
-daily reward, furniture purchase/placement and the same saved character after
-reload. A named track saved to the server. Invalid identity and CAPTCHA tokens
-are rejected. A private D1 export restored exactly into an isolated local D1
-database, retaining identity ownership, the room, nine items and one song.
-Cross-browser/device recovery, live two-player trades, capacity/usage and
-remote disaster recovery remain unverified. The published v0.5.0 assets below
-are unchanged; they predate this deployed managed-account build.
+LOAD AND FREE-TIER PROTECTION
+Fixed real five-player save contention with one Free-compatible SQLite-backed
+Durable Object coordinator. D1 remains the authoritative save store. Deferred
+response snapshots until a successful commit and removed two unnecessary DB
+round trips. Idle clients poll less, movement responses replace redundant state
+polls, hidden tabs are quiet, and paused-service messages remain visible.
+
+Final isolated remote test: five clients, 100 saved characters, 60 seconds,
+346 motion/state requests; no failed load responses or connection resets.
+Median/p95 latency: 817/1193 ms. The full 387-request suite used 1,161 D1 row
+writes; purchases, seats, whispers, friends, trades, replay rejection and music
+rewards passed. Full admission and forced daily-limit checks passed without
+lost progress. Fifty automated Node cases pass. This is a short bounded test,
+not proof of viral or all-day capacity. Details: PLAYTEST-SETUP.md and
+validation/free-playtest-2026-10-20.json.
+
+The v0.5.0 downloadable preview below is unchanged and predates these features.
 
 AFTERHOURS 0.5 — PLAYABLE DEVELOPMENT BUILD
 20 October 2026

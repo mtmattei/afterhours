@@ -1,50 +1,69 @@
 # Free, limited Afterhours playtest
 
-Status (20 October 2026): the compiled Uno app and shared service are deployed at
-https://afterhours-playtest.matthewtmattei.workers.dev/ on the Free plans.
-Guest entry and persistent saves are verified. Google sign-in is enabled in
-Supabase with a dedicated web client and the exact Supabase callback URI. The
-private client secret is stored only in Supabase's provider settings. The Google
-app remains External/Testing, with the owner added as a test user.
+Status (20 October 2026): ready for a small, supervised friends playtest at
+https://afterhours-playtest.matthewtmattei.workers.dev/ . The compiled Uno app,
+Cloudflare Workers/Durable Objects/D1 and Supabase Auth stay on Free plans.
+No billing, upgrade, paid plan or trial was enabled.
 
-The live linking flow requests only email and profile information. The owner
-completed consent, linked the existing guest, and returned through the callback
-to the same character. The separate **Restore account with Google** flow also
-completed in the current browser. A server comparison against the pre-link
-backup confirmed the account-to-character mapping and complete game state were
-unchanged: no replacement character was created. A fresh browser or separate
-device has not been tested. Add invited testers to Google's test audience before
-they try linking or recovery.
-The downloadable v0.5.0 preview is separate from this newer playtest work.
+## Joining with friends
 
-Verified on the live HTTPS app: real Turnstile-protected guest signup, a daily
-reward, furniture purchase and placement, and returning to the same character
-after reload via **Join shared world > Continue my character**. The name,
-245-credit balance, reward claim and room layout remained intact. A named music
-track saved to the server. Invalid identity tokens return 401; invalid CAPTCHA
-tokens are rejected by Supabase with `captcha_failed`.
+1. Open the link on a desktop browser and choose **Join shared world**.
+2. Choose **Play as a guest**, complete the security check, and meet in Side B.
+3. Use the same browser and **Continue my character** when returning. Shared
+   progress is saved on the server; solo progress is separate.
+4. Google linking/recovery is invite-only while Google's app is in Testing.
+   The owner is currently the only test user. Friends' emails were deferred at
+   the owner's request. Add each friend's Google email to the test audience
+   before they choose **Link Google account**. Keep browser data until linked.
+5. Linked players can use **Sign out on this device**, then **Restore account
+   with Google**. Unlinked guests cannot sign out through that control.
 
-A private D1 export was restored into an isolated **local D1** instance. The
-entire restored world matched the export exactly, including one identity and
-character, one room, nine furniture items and one song. The live database was
-not overwritten. This verifies the export format and local restoration, not a
-remote disaster-recovery exercise or recovery of Supabase identities.
+Verified live: protected guest signup, reward and furniture purchase/placement,
+song saving, reload continuity, Google guest linking, and restoration after a
+full app sign-out and reload. The sign-out cleared the remembered game identity
+and session; the entry screen returned to **Play as a guest**. Google restoration
+then loaded the original character. A private database comparison confirmed the
+complete game and account mapping were unchanged: 245 credits, nine furniture
+items, one room and one song. This used the same browser after sign-out; separate
+physical devices/browser engines remain untested.
 
-Still unverified live: Google recovery from a fresh browser or separate device,
-two-player trades, full-capacity and daily-limit behavior, and provider CPU/usage
-under load. Keep this an operator test until those checks pass; the five-player
-cap does not make it ready for broad social promotion.
+A private D1 export was restored into both an isolated local database and a
+separate remote D1 database. Revision and complete world data matched exactly.
+The live database was never overwritten. This is a game-data restore rehearsal;
+it does not back up or restore Supabase identities.
 
-The first test uses Cloudflare Workers static assets for the compiled Uno app,
-D1 for authoritative game saves, Supabase Auth for guest identities and Google
-linking, and Cloudflare Turnstile for guest signup protection. Use the Free plans.
-No custom domain, paid plan, email service, or purchase is needed for this test.
+The remote acceptance run used a disposable copy of the exact service with
+100 synthetic characters and five simultaneous clients. Purchases, exclusive
+seats, private whispers, friends, two-party trades, trade replay rejection and
+performance rewards passed. A 60-second motion/state run completed 346 requests
+with no failed responses or connection resets (387 requests including checks).
+Median latency was 817 ms; p95 was 1,193 ms. Five-player and 100-character caps
+rejected excess admissions; forcing the test daily counter to its cap returned
+429 without changing the world, then the same character resumed after reset.
+See [the redacted test report](validation/free-playtest-2026-10-20.json).
+
+The first load run found save contention. A single SQLite-backed Durable Object
+now coordinates the bounded world while D1 remains authoritative. Each save is
+acknowledged only after D1 commits. The coordinator has no independent player
+state to migrate or restore. The edge Worker CPU sample for the final version
+was p50 0.87 ms / p90 1.35 ms / p99 2.10 ms with no CPU-limit errors; coordinator
+metrics also showed no errors. Provider charts lag and these are short-run
+samples, not a sustained capacity guarantee. A dropped local test connection
+interrupted an earlier run; the final run completed without resets.
+
+Fifty automated Node test cases pass. Cancellation, mismatched-account and
+transient-failure paths have automated coverage; live cancellation and different
+physical devices still need human acceptance. Test credentials and database
+snapshots remain private and ignored by Git. Disposable cloud test resources
+are removed after verification. Published v0.5.0 downloads predate this playtest.
 
 ## Scope and limits
 
 - Five connected players, 100 total characters, and a 1.7 MB world snapshot.
 - At most 12,000 API requests per UTC day. One active player uses roughly
-  1–5 requests/second, so this is a short supervised test, not all-day hosting.
+  0.25 requests/second when alone and idle, roughly 0.67 when idle with peers,
+  and up to four while moving, constrained by response time. Allow around
+  10–20 minutes for a first group session; this is not all-day hosting.
 - Exhaustion pauses play; it does not erase characters. Static solo play remains
   available while the shared service is paused.
 - Guest progress belongs to a stable, signed account ID. Linking Google retains
@@ -53,7 +72,8 @@ No custom domain, paid plan, email service, or purchase is needed for this test.
   Local/legacy guest characters and managed playtest characters are separate.
   Existing Google characters are not merged with another guest.
 - The single world document deliberately keeps purchases and trades atomic.
-  It needs room-level storage and load testing before a broad social launch.
+  It needs room-level storage and longer, geographically distributed load
+  testing before a broad social launch.
 - Free platform quotas, CPU limits, outages, and abuse can stop service before
   the application cap does. These limits are not a capacity guarantee.
 
@@ -107,10 +127,13 @@ npx wrangler@4.151.3 d1 migrations apply afterhours-playtest --remote --config s
 npx wrangler@4.151.3 deploy --config service/wrangler.json
 ```
 
+The generated configuration includes a Free-compatible SQLite Durable Object
+namespace for the world coordinator. Its entry point is `service/worker/cloudflare.mjs`;
+do not deploy the uncoordinated adapter directly for this shared playtest.
 The API and compiled Uno client share one origin. Keep Workers and Supabase on
 their Free plans. Do not enable paid upgrades as part of these steps.
 
-## Required checks before inviting test players
+## Repeatable acceptance checks
 
 1. Open the actual HTTPS app in two browsers. Join as guests, buy furniture,
    edit a room, save a song, and trade a piece. Refresh both browsers.
@@ -126,6 +149,29 @@ their Free plans. Do not enable paid upgrades as part of these steps.
 6. Export D1 and restore the export into a **separate test database**. Verify the
    same account ID still owns its room, song and furniture. Never use a restore
    rehearsal to overwrite the live database.
+
+## Bounded remote load check
+
+Create a disposable D1 database named `afterhours-check`. Run
+`node scripts/check-free-playtest.mjs prepare --database-id=TEST-DATABASE-UUID`.
+This writes a test-only issuer, coordinator configuration, synthetic seed and
+short-lived test credentials into ignored `.build-cache/playtest-check`.
+Deploy `issuer-wrangler.json`, import `seed.sql` into **only that test database**,
+and deploy `wrangler.json` from that directory using Wrangler. Then run
+`node scripts/check-free-playtest.mjs run --seconds=60`.
+The harness refuses the production hostname and caps itself at 2,200 requests.
+A rerun needs the synthetic database reseeded. Never import that seed into the
+public database. Remove the test Worker, its coordinator namespace, the public-
+key issuer Worker and test database afterward. Preserve only redacted reports.
+
+The final acceptance run used 1,161 D1 row writes for 387 requests (three per
+request on average). The 12,000-request daily application cap therefore budgets
+about 36,000 D1 writes for this path, below D1 Free's 100,000/day quota. Indexed
+inserts, other workloads and operator activity consume additional allowance.
+The cap is deliberately not raised. It resets at midnight UTC (8 p.m. Eastern
+on this test date). Client background tabs stop polling; successful movement
+responses replace unnecessary state polls. Platform quotas are shared with
+other apps on the account and may stop play sooner.
 
 ## Saves, moderation and operating the test
 
@@ -152,3 +198,6 @@ backup/restore drills, abuse controls, and measured load capacity.
 - [Supabase CAPTCHA configuration](https://supabase.com/docs/guides/auth/auth-captcha)
 - [Cloudflare Workers free limits](https://developers.cloudflare.com/workers/platform/limits/)
 - [Supabase free-project pausing](https://supabase.com/docs/guides/platform/free-project-pausing)
+
+- [Cloudflare D1 free quotas](https://developers.cloudflare.com/d1/platform/pricing/)
+- [Durable Objects free quotas](https://developers.cloudflare.com/durable-objects/platform/pricing/)

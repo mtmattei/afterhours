@@ -180,7 +180,7 @@
     if(art.complete&&art.naturalWidth)paint();else art.addEventListener('load',paint,{once:true});return cv;
   }
   const category=type=>Furniture.catalog[type].category||(['sofa','seat','table'].includes(type)?'lounge':['decks','speaker','records','jukebox'].includes(type)?'music':['vending','portal','dice','notice','bowl','gift'].includes(type)?'interactive':'decor');
-  const collections=[['all','All collections','A room that feels like you'],['loft','Soft loft','Warm wood. Soft edges. Slow evenings.'],['diner','Midnight diner','Coffee and company, all night long.'],['studio','Sound studio','Find your sound. Make some noise.'],['arcade','Arcade nights','One more game before we go.'],['garden','Secret garden','Make a little room to breathe.'],['originals','Afterhours originals','The pieces that started the night.']];
+  const collections=[['all','All collections','A room that feels like you'],['loft','Soft loft','Warm wood. Soft edges. Slow evenings.'],['diner','Midnight diner','Coffee and company, all night long.'],['studio','Sound studio','Find your sound. Make some noise.'],['arcade','Arcade nights','One more game before we go.'],['garden','Secret garden','Make a little room to breathe.'],['fantasy','Starlit fantasy','Moonlight, crystal, and a little magic.'],['den','After-hours den','Leather, chrome, and the good speakers.'],['originals','Afterhours originals','The pieces that started the night.']];
   function catalog(tab='shop',filter='all',query='',collection='all'){
     const selected=collections.find(c=>c[0]===collection)||collections[0];
     panel('Room for imagination','THE FURNITURE SHOP',topTabs([['shop','Shop furniture'],['owned','My inventory'],['discs','Records']],tab)+

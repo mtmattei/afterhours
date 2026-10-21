@@ -45,7 +45,7 @@ test('gestures hold each pose for 125 ms and the lamp dither stays within its le
 });
 test('every new catalog piece purchases at its authoritative price and survives save validation',()=>{
  const entries=Object.entries(F.catalog).filter(([,v])=>v.atlas);
- assert.equal(entries.length,32);
+ assert.equal(entries.length,72);
  for(const [type,item] of entries){
   const g=new G.Game(null,{coins:240,decor:F.starter()});
   g.dispatch('buy',{type,id:'new-piece'});assert.equal(g.state.coins,240-item.price);

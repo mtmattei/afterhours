@@ -23,7 +23,7 @@
   const roomKey=()=>window.AfterhoursOnline?.remoteRoom()?'shared:'+room().key:personal?'my:'+activeRoomId:'public:'+roomIndex;
   const legacyPersist=persist,legacyEnter=enterRoom,legacyWalk=walkTo,legacySeat=useSeat,legacyLook=look,legacyStand=standUp;
   function sync(){
-    coins=game.state.coins;player.name=game.state.profile.name;
+    coins=game.state.coins;player.name=game.state.profile.name;player.chatColor=game.state.profile.chatColor;
     decor=window.AfterhoursOnline?.remoteRoom()?.items||game.state.items.filter(i=>i.placed===false||i.roomId===activeRoomId);
     updateHUD();
   }
@@ -138,10 +138,10 @@
   function profile(){
     const s=game.state;
     panel('This is you','RESIDENT PROFILE',`<div class="profile-summary"><div class="profile-art large-avatar" style="background-position:${-spriteIndex*70}px 0"></div><div><h3>${h(s.profile.name)}</h3><p>Level ${G.level(s)} · ${s.profile.xp} XP<br>Here since ${new Date(s.profile.joined).toLocaleDateString()}</p></div></div>
-      <form id="profileForm">${field('Display name','displayName',s.profile.name)}${field('Motto','motto',s.profile.motto)}<button class="primary">Save profile</button> <button type="button" class="soft-button" id="profileLook">Change outfit</button></form>
+      <form id="profileForm">${field('Display name','displayName',s.profile.name)}${field('Motto','motto',s.profile.motto)}<fieldset class="chat-colors"><legend>Chat name colour</legend>${G.chatColors.map((c,i)=>`<label><input type="radio" name="chatColor" value="${c}" ${c===s.profile.chatColor?'checked':''} aria-label="${['Cherry','Rose','Violet','Cobalt','Teal','Moss','Ember','Ink'][i]}"><span style="background:${c}">${h(s.profile.name)}</span></label>`).join('')}</fieldset><button class="primary">Save profile</button> <button type="button" class="soft-button" id="profileLook">Change outfit</button></form>
       <div class="panel-section"><h3>Your keepsakes</h3><div class="badge-chips">${s.profile.badges.length?s.profile.badges.map(id=>{const a=G.achievements.find(x=>x.id===id);return `<span>${a?.icon||'★'} ${h(a?.name||id)}</span>`;}).join(''):'<p>Your first badge is waiting in the Journal.</p>'}</div></div>
       <div class="panel-section"><h3>Keep your world</h3><p>Export a save to keep your rooms, songs, furniture, credits, and companion together.</p><div class="button-row"><button id="exportSave" class="soft-button">Export save</button><label class="soft-button file-button">Restore save<input type="file" id="importSave" accept=".json,application/json"></label><button id="backupSave" class="soft-button">Use last backup</button></div></div>`);
-    get('profileForm').onsubmit=e=>{e.preventDefault();if(act('profile',{name:get('displayName').value,motto:get('motto').value},'Profile saved.').ok){player.name=game.state.profile.name;profile();}};
+    get('profileForm').onsubmit=e=>{e.preventDefault();if(act('profile',{name:get('displayName').value,motto:get('motto').value,chatColor:get('profileForm').querySelector('[name=chatColor]:checked')?.value},'Profile saved.').ok){player.name=game.state.profile.name;player.chatColor=game.state.profile.chatColor;profile();}};
     button('profileLook',()=>look());
     button('exportSave',()=>{saveWorld();download(new Blob([JSON.stringify(game.state,null,2)],{type:'application/json'}),'afterhours-save.json');});
     get('importSave').onchange=async e=>{

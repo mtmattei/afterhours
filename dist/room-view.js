@@ -26,12 +26,12 @@
   // or every few seconds when it is quiet, so a conversation reads as one rising column.
   class Speech{
     constructor(){this.entries=[];this.last=new Map();this.step=0;this.stepped=0;}
-    add(id,name,text,until,mode='say',now=Date.now(),at=null){
+    add(id,name,text,until,mode='say',now=Date.now(),at=null,color=null){
       if(!text||until<=now||mode==='whisper')return;
       const key=until+':'+text;
       if(this.last.get(id)===key)return;
       this.last.set(id,key);this.step++;this.stepped=now;
-      this.entries.push({key:id+'|'+key,id,name,text:String(text).slice(0,160),until,mode,born:this.step,at});
+      this.entries.push({key:id+'|'+key,id,name,text:String(text).slice(0,160),until,mode,born:this.step,at,color});
       this.entries=this.entries.filter(e=>e.until>now).slice(-12);
     }
     active(now=Date.now()){
@@ -76,7 +76,7 @@
     }catch{}
   }
   function mount(canvas){
-    const camera=new Camera(),speech=new Speech(),nodes=new Map(),LINE=30;
+    const camera=new Camera(),speech=new Speech(),nodes=new Map(),LINE=36;
     const overlay=document.createElement('div');overlay.className='speech-layer';overlay.setAttribute('aria-hidden','true');canvas.parentElement.append(overlay);
     const resize=()=>{
       const rect=canvas.getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,2);
@@ -93,7 +93,7 @@
     }
     function note(p,x,y,self){
       const id=self?'self':p.id||'resident:'+p.name;
-      speech.add(id,p.name,p.bubble,p.until,p.bubbleMode,Date.now(),{x,y:y-125});
+      speech.add(id,p.name,p.bubble,p.until,p.bubbleMode,Date.now(),{x,y:y-125},p.chatColor);
     }
     function end(){
       const active=speech.active().reverse(),visible=new Set(),placed=[];
@@ -102,7 +102,7 @@
         if(!entry.at)continue;visible.add(entry.key);
         let node=nodes.get(entry.key);
         if(!node){
-          node=document.createElement('div');node.className='speech-bubble'+(entry.id==='self'?' own':'')+(entry.mode==='shout'?' shout':'');
+          node=document.createElement('div');node.className='speech-bubble'+(entry.mode==='shout'?' shout':'');if(entry.color)node.style.setProperty('--name',entry.color);
           const name=document.createElement('b'),text=document.createElement('span');name.textContent=entry.name;text.textContent=entry.text;node.append(name,text);overlay.append(node);nodes.set(entry.key,node);
         }
         const p=camera.project(entry.at.x,entry.at.y),w=node.offsetWidth,h=node.offsetHeight;
@@ -110,7 +110,7 @@
         let y=base-entry.lift*LINE;
         for(const other of placed){if(x<other.x+other.w+8&&x+w+8>other.x&&y<other.y+other.h+6&&y+h+6>other.y)y=other.y-h-6;}
         node.style.transform=`translate(${Math.round(x)}px,${Math.round(base)}px)`;node.style.translate=`0 ${Math.round(y-base)}px`;
-        node.classList.toggle('risen',y<base);node.style.setProperty('--tail',Math.max(15,Math.min(w-15,p.x-x))+'px');placed.push({x,y,w,h});
+        node.classList.toggle('risen',y<base);placed.push({x,y,w,h});
       }
       for(const [id,node] of nodes)if(!visible.has(id)){node.remove();nodes.delete(id);}
     }

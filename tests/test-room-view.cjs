@@ -69,3 +69,12 @@ test('seated avatars remain behind closer furniture and ahead of their own chair
  assert.ok(depth>F.depth(seat));assert.ok(depth<F.depth(foreground));
  assert.equal(F.actorDepth(actor,'missing:0',[seat]),actor.x+actor.y);
 });
+test('chat name colour comes from the palette, survives saves and rejects other values',()=>{
+ const g=new G.Game(null,{coins:240,decor:F.starter()});
+ assert.equal(g.state.profile.chatColor,G.chatColors[0]);
+ g.dispatch('profile',{name:'neon',motto:'',chatColor:G.chatColors[3]});assert.equal(g.state.profile.chatColor,G.chatColors[3]);
+ g.dispatch('profile',{name:'neon',motto:'',chatColor:'red; background:url(x)'});assert.equal(g.state.profile.chatColor,G.chatColors[3]);
+ const saved=JSON.parse(JSON.stringify(g.state));assert.equal(new G.Game(saved).state.profile.chatColor,G.chatColors[3]);
+ saved.profile.chatColor='#123456';assert.equal(new G.Game(saved).state.profile.chatColor,G.chatColors[0]);
+ delete saved.profile.chatColor;assert.equal(new G.Game(saved).state.profile.chatColor,G.chatColors[0]);
+});

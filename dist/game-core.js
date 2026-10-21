@@ -8,6 +8,8 @@
   const uid = () => typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(36).slice(2);
   const day = (time = Date.now()) => new Date(time).toISOString().slice(0, 10);
   const text = (value, max = 80) => String(value ?? '').trim().slice(0, max);
+  // Name-block colours for chat bubbles; each keeps white text above 4.5:1 contrast.
+  const chatColors = ['#c8102e','#d6246e','#7a3fc9','#1f5fbf','#0f7a6c','#3f7d1f','#b8520a','#3a3644'];
   const clamp = (value, min, max) => Math.max(min, Math.min(max, Number(value) || 0));
   const prices = Object.fromEntries(Object.entries(F.catalog).map(([id,item])=>[id,item.price]));
   const quests = [
@@ -40,7 +42,7 @@
       muted:Array.from({length:4},(_,i)=>!!input.muted?.[i]),created:input.created||Date.now(),updated:Date.now()};
   }
   function initial(legacy = {}) {
-    return {version:5,revision:0,profile:{id:uid(),name:'daydream',motto:'Good people. Late nights.',joined:Date.now(),xp:0,avatar:legacy.avatar||0,badges:[]},
+    return {version:5,revision:0,profile:{id:uid(),name:'daydream',motto:'Good people. Late nights.',joined:Date.now(),xp:0,avatar:legacy.avatar||0,badges:[],chatColor:chatColors[0]},
       coins:Number.isFinite(legacy.coins)?Math.max(0,legacy.coins):240,
       rooms:[{id:'home',name:'Your afterhours',description:'A little place to call my own.',tags:'music, hangout',lighting:'amber',door:'open',notes:[],playlist:[],event:null}],
       activeRoom:'home',items:(legacy.decor||[]).map(d=>({...d,roomId:d.placed===false?null:'home',state:true})),
@@ -62,7 +64,7 @@
     }
     raw.songs.forEach(s=>{if(!s.id||!s.title||!Array.isArray(s.pattern)||s.pattern.length!==4||![16,32].includes(s.length)||s.pattern.some(r=>!Array.isArray(r)||r.length!==s.length||r.some(v=>v!==0&&v!==1)))throw Error('Invalid song in save.');});
     const result=clone(raw);
-    result.profile.name=text(result.profile.name,20)||'daydream';result.profile.motto=text(result.profile.motto,120);
+    result.profile.name=text(result.profile.name,20)||'daydream';result.profile.motto=text(result.profile.motto,120);result.profile.chatColor=chatColors.includes(result.profile.chatColor)?result.profile.chatColor:chatColors[0];
     result.activeRoom=ids.has(result.activeRoom)?result.activeRoom:result.rooms[0].id;
     return result;
   }
@@ -104,7 +106,7 @@
           if(!q||s.claimed.includes(q.id)||progress(s,q)<q.target)throw Error('Complete this quest before claiming its reward.');
           s.claimed.push(q.id);ledger(s,q.reward,q.name,'quest-'+q.id,now);s.profile.xp+=q.xp;break;
         }
-        case 'profile':s.profile.name=text(payload.name,20)||s.profile.name;s.profile.motto=text(payload.motto,120);break;
+        case 'profile':s.profile.name=text(payload.name,20)||s.profile.name;s.profile.motto=text(payload.motto,120);if(chatColors.includes(payload.chatColor))s.profile.chatColor=payload.chatColor;break;
         case 'buy': {
           if(!prices[payload.type])throw Error('That item is not in the catalog.');
           ledger(s,-prices[payload.type],'Bought '+payload.type,uid(),now);
@@ -220,5 +222,5 @@
       badges(s);this.state=s;this.save();return result;
     }
   }
-  return {Game,initial,validate,quests,achievements,progress,level,needs,prices,pattern,song,starterPattern,uid,day,clone,ledger};
+  return {Game,initial,validate,quests,achievements,progress,level,needs,prices,pattern,song,starterPattern,uid,day,clone,ledger,chatColors};
 });

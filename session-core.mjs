@@ -227,7 +227,7 @@ export function action(db,user,type,p={},now=Date.now()){
 }
 export function snapshot(db,user,now=Date.now()){
   const current=roomData(db,user.room),owner=roomOwner(db,user.room),meta=ownedRoom(db,user.room);
-  const publicUser=u=>({id:u.id,name:u.game.profile.name,motto:u.game.profile.motto,level:G.level(u.game),avatar:u.pose.avatar,online:now-u.lastSeen<20000,room:u.room});
+  const publicUser=u=>({id:u.id,name:u.game.profile.name,motto:u.game.profile.motto,chatColor:u.game.profile.chatColor,level:G.level(u.game),avatar:u.pose.avatar,online:now-u.lastSeen<20000,room:u.room});
   const peers=Object.values(db.users).filter(u=>u.id!==user.id&&u.room===user.room&&now-u.lastSeen<20000&&!user.blocked.includes(u.id)).map(u=>({...publicUser(u),pose:u.pose}));
   const trades=Object.values(db.trades).filter(t=>t.participants.includes(user.id)&&now-t.updated<600000).sort((a,b)=>b.updated-a.updated).map(t=>({...t,people:t.participants.map(id=>publicUser(db.users[id])),items:Object.fromEntries(t.participants.map(id=>[id,t.offers[id].map(itemId=>db.users[id].game.items.find(i=>i.id===itemId)).filter(Boolean).map(i=>({id:i.id,type:i.type}))]))}));
   return {revision:db.revision,time:now,self:publicUser(user),game:user.game,peers,room:user.room,

@@ -93,7 +93,7 @@
     }
     function note(p,x,y,self){
       const id=self?'self':p.id||'resident:'+p.name;
-      speech.add(id,p.name,p.bubble,p.until,p.bubbleMode,Date.now(),{x,y:y-125},p.chatColor);
+      speech.add(id,p.name,p.bubble,p.until,p.bubbleMode,Date.now(),{x,y:y-(self?140:125)},p.chatColor);
     }
     function end(){
       const active=speech.active().reverse(),visible=new Set(),placed=[];
@@ -112,7 +112,7 @@
         node.style.transform=`translate(${Math.round(x)}px,${Math.round(base)}px)`;node.style.translate=`0 ${Math.round(y-base)}px`;
         node.classList.toggle('risen',y<base);placed.push({x,y,w,h});
       }
-      for(const [id,node] of nodes)if(!visible.has(id)){node.remove();nodes.delete(id);}
+      for(const [id,node] of nodes)if(!visible.has(id)){nodes.delete(id);node.classList.add('leaving');setTimeout(()=>node.remove(),140);}
     }
     function reset(){speech.clear();nodes.forEach(n=>n.remove());nodes.clear();camera.x=750;camera.y=530;camera.follow=false;camera.constrain();}
     return{camera,begin,note,end,reset,resize};

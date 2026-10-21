@@ -7,7 +7,7 @@ const game=path.resolve(root,'..');
 const read=p=>readFile(p,'utf8');
 const wrap=(name,source)=>`const ${name}=(()=>{const module={exports:{}};\n${source}\nreturn module.exports;})();\n`;
 const core=(await read(path.join(game,'session-core.mjs'))).replace(/^import .+;\r?\n/gm,'').replace(/^export /gm,'');
-const source=wrap('F',await read(path.join(game,'dist/furniture.js')))+wrap('G',(await read(path.join(game,'dist/game-core.js'))).replace("require('./furniture.js')",'F'))+core+'\n'+await read(path.join(root,'worker/adapter.js'));
+const source=wrap('W',await read(path.join(game,'dist/wardrobe.js')))+wrap('F',await read(path.join(game,'dist/furniture.js')))+wrap('G',(await read(path.join(game,'dist/game-core.js'))).replace("require('./furniture.js')",'F').replace("require('./wardrobe.js')",'W'))+core+'\n'+await read(path.join(root,'worker/adapter.js'));
 await mkdir(path.join(root,'dist/server'),{recursive:true});
 await mkdir(path.join(root,'dist/.openai'),{recursive:true});
 await mkdir(path.join(root,'dist/drizzle'),{recursive:true});

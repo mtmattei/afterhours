@@ -2,7 +2,7 @@
 (()=>{
  'use strict';
  const W=AfterhoursWardrobe, images={},parts=new Map(),bodies=new Map();
- const files={head:'wardrobe-heads-v1.png',top:'wardrobe-tops-v1.png',bottom:'wardrobe-bottoms-v1.png'};
+ const files={head:'wardrobe-heads-v1.webp',top:'wardrobe-tops-v1.webp',bottom:'wardrobe-bottoms-v1.webp'};
  let ready=null;
  const load=()=>ready??=Promise.all(Object.entries(files).map(([id,file])=>new Promise(resolve=>{const img=new Image();images[id]=img;img.onload=resolve;img.onerror=resolve;img.src='assets/'+file;})));
  const heads=[[[244,12,240,235],[551,10,231,234]],[[176,253,326,258],[529,252,300,258]],[[201,511,278,227],[552,517,239,220]],[[210,738,247,252],[548,742,244,248]],[[199,990,298,244],[543,990,250,241]],[[242,1236,239,279],[561,1239,229,277]]];

@@ -10,8 +10,8 @@ dist = project / 'dist'
 (root/'release').mkdir(exist_ok=True)
 references = '\n'.join(p.read_text(encoding='utf-8') for p in dist.iterdir() if p.suffix in ['.js','.css','.html'])
 assets = {
-    path.name: 'data:image/png;base64,' + base64.b64encode(path.read_bytes()).decode()
-    for path in sorted((dist/'assets').glob('*.png'))
+    path.name: 'data:image/webp;base64,' + base64.b64encode(path.read_bytes()).decode()
+    for path in sorted((dist/'assets').glob('*.webp'))
 }
 html = (dist/'index.html').read_text(encoding='utf-8')
 styles = re.findall(r'<link rel="stylesheet" href="([^"]+)">', html)
@@ -23,9 +23,9 @@ for name in styles[1:]:
     html = html.replace('<link rel="stylesheet" href="'+name+'">','')
 boot = '<script>window.ART='+json.dumps(assets,separators=(',',':'))+''';
 // CSS custom properties have a size ceiling. Render small UI thumbnails at their display scale.
-for(const name of ['avatars.png','side-b.png','room-atlas.png','my-room.png']){
+for(const name of ['avatars.webp','side-b.webp','room-atlas.webp','my-room.webp']){
  const image=new Image();
- image.onload=()=>{const thumb=document.createElement('canvas'),size=name==='avatars.png'?504:384;
+ image.onload=()=>{const thumb=document.createElement('canvas'),size=name==='avatars.webp'?504:384;
   thumb.width=size;thumb.height=Math.round(image.naturalHeight/image.naturalWidth*size);
   thumb.getContext('2d').drawImage(image,0,0,thumb.width,thumb.height);
   document.documentElement.style.setProperty('--asset-'+name.replace('.','-'),'url("'+thumb.toDataURL('image/png')+'")');

@@ -6,7 +6,7 @@
   "status": "Original source artwork. Catalog placement and avatar layering integration are in progress.",
   "assets": [
     {
-      "file": "wardrobe-heads-v1.png",
+      "file": "wardrobe-heads-v1.webp",
       "collection": "modular-avatar",
       "rows": [
         "Tousled crop",
@@ -19,10 +19,11 @@
       "columns": [
         "front",
         "back"
-      ]
+      ],
+      "source": "../../art/source/wardrobe-heads-v1.png"
     },
     {
-      "file": "wardrobe-tops-v1.png",
+      "file": "wardrobe-tops-v1.webp",
       "collection": "modular-avatar",
       "rows": [
         "Pocket tee",
@@ -34,10 +35,11 @@
         "front",
         "back",
         "seated"
-      ]
+      ],
+      "source": "../../art/source/wardrobe-tops-v1.png"
     },
     {
-      "file": "wardrobe-bottoms-v1.png",
+      "file": "wardrobe-bottoms-v1.webp",
       "collection": "modular-avatar",
       "rows": [
         "Straight jeans",
@@ -49,10 +51,11 @@
         "front",
         "back",
         "seated"
-      ]
+      ],
+      "source": "../../art/source/wardrobe-bottoms-v1.png"
     },
     {
-      "file": "furniture-fantasy-a-v1.png",
+      "file": "furniture-fantasy-a-v1.webp",
       "collection": "fantasy-collectors",
       "order": "Left to right, top row then bottom row",
       "pieces": [
@@ -66,10 +69,11 @@
         "Event horizon table",
         "Constellation chess table",
         "Prism grand"
-      ]
+      ],
+      "source": "../../art/source/furniture-fantasy-a-v1.png"
     },
     {
-      "file": "furniture-fantasy-b-v1.png",
+      "file": "furniture-fantasy-b-v1.webp",
       "collection": "fantasy-collectors",
       "order": "Left to right, top row then bottom row",
       "pieces": [
@@ -83,10 +87,11 @@
         "Medusa lamp",
         "Winterglass bench",
         "Coral cathedral divider"
-      ]
+      ],
+      "source": "../../art/source/furniture-fantasy-b-v1.png"
     },
     {
-      "file": "furniture-man-cave-a-v1.png",
+      "file": "furniture-man-cave-a-v1.webp",
       "collection": "man-cave",
       "order": "Left to right, top row then bottom row",
       "pieces": [
@@ -100,10 +105,11 @@
         "Glassworks pinball",
         "Emerald billiards",
         "Touring flight-case table"
-      ]
+      ],
+      "source": "../../art/source/furniture-man-cave-a-v1.png"
     },
     {
-      "file": "furniture-man-cave-b-v1.png",
+      "file": "furniture-man-cave-b-v1.webp",
       "collection": "man-cave",
       "order": "Left to right, top row then bottom row",
       "pieces": [
@@ -117,7 +123,8 @@
         "Workshop wheel clock",
         "Vinyl carousel",
         "Racing-green tool chest"
-      ]
+      ],
+      "source": "../../art/source/furniture-man-cave-b-v1.png"
     }
   ]
 }

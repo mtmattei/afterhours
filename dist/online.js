@@ -81,7 +81,7 @@
         },name,W.getScene().spriteIndex);
         token=out.token;next=out.snapshot;
       }
-      W.saveWorld();solo=G.clone(W.game.state);online=true;lastGameRevision=-1;apply(next);renderRoom();W.close();W.toast('You joined the shared world.');
+      W.saveWorld();solo=G.clone(W.game.state);online=true;lastGameRevision=-1;apply(next);renderRoom();W.close();W.toast('You joined the shared world.');awayPanel();
     }catch(e){const error=get('panelError');if(error){error.hidden=false;error.textContent=e.message;}else W.toast(e.message);}
   }
   function disconnect(){
@@ -218,12 +218,27 @@
   function renderFriends(host){
     if(!online||!host)return;
     host.innerHTML='<h3>Connected friends</h3>'+state.friendRequests.map(p=>`<div class="directory-room"><span><b>${h(p.name)}</b><small>Wants to be friends</small></span><button class="soft-button" data-accept-friend="${p.id}">Accept</button><button class="soft-button" data-decline-friend="${p.id}">Decline</button></div>`).join('')+
-      state.friends.map(p=>`<div class="directory-room"><span><b>${h(p.name)}</b><small>${p.online?'Online':'Offline'}</small></span><button class="soft-button" data-follow-friend="${p.id}" ${p.online?'':'disabled'}>Follow</button><button class="text-button" data-remove-friend="${p.id}">Remove</button></div>`).join('');
+      state.friends.map(p=>`<div class="directory-room"><span><b>${h(p.name)}</b><small>${p.online?'Here now':p.lastSeen?'Seen '+ago(p.lastSeen):'Offline'}</small></span><button class="soft-button" data-follow-friend="${p.id}" ${p.online?'':'disabled'}>Follow</button><button class="text-button" data-remove-friend="${p.id}">Remove</button></div>`).join('');
     if(!state.friends.length&&!state.friendRequests.length)host.innerHTML+='<p>Click a connected player to send a friend request.</p>';
     host.querySelectorAll('[data-accept-friend]').forEach(b=>b.onclick=()=>send('answerFriend',{user:b.dataset.acceptFriend,accept:true}));
     host.querySelectorAll('[data-decline-friend]').forEach(b=>b.onclick=()=>send('answerFriend',{user:b.dataset.declineFriend,accept:false}));
     host.querySelectorAll('[data-follow-friend]').forEach(b=>b.onclick=()=>joinRoom(state.friends.find(p=>p.id===b.dataset.followFriend).room));
     host.querySelectorAll('[data-remove-friend]').forEach(b=>b.onclick=()=>send('unfriend',{user:b.dataset.removeFriend}));
+  }
+  const ago=time=>{const m=Math.round((Date.now()-time)/60000);if(m<1)return'just now';if(m<60)return m+' min ago';if(m<1440)return Math.round(m/60)+' h ago';return m<10080?new Date(time).toLocaleDateString(undefined,{weekday:'short'}):new Date(time).toLocaleDateString();};
+  function awayPanel(){
+    const items=state?.away||[];if(!items.length)return;const icon={visit:'⌂',friend:'♡',chart:'★'};
+    W.panel('While you were away','SINCE YOUR LAST VISIT','<div class="away-list">'+items.slice(0,10).map(e=>`<div class="away-item"><span aria-hidden="true">${icon[e.kind]||'•'}</span><p>${h(e.text)}</p><small>${ago(e.time)}</small></div>`).join('')+
+      (items.length>10?`<p class="small-note">and ${items.length-10} more</p>`:'')+'</div><button class="primary" id="awayDone">Got it</button>');
+    W.button('awayDone',()=>{send('awaySeen').catch(()=>{});W.close();});
+  }
+  function chartPanel(){
+    const chart=state?.chart;if(!chart)return;const self=state.self.id;
+    const row=(e,mark)=>`<div class="chart-row${e.user===self?' own':''}"><span class="chart-rank">${mark||e.rank}</span><div><b>${h(e.title)}</b><small>${h(e.artist)}${e.user===self?' · you':''}</small></div><em>${e.listeners} ♡</em></div>`;
+    W.panel('This week’s chart','WEEK '+chart.week.slice(-2)+' · RESETS MONDAY',(chart.top.length?chart.top.map(e=>row(e)).join(''):'<p>No applause yet this week. Play a set and the chart opens.</p>')+
+      (chart.last?.top.length?'<h3 class="chart-heading">Last week</h3>'+chart.last.top.map(e=>row(e,['①','②','③'][e.rank-1])).join(''):'')+
+      '<p class="small-note">Ranked by how many different listeners applauded a track this week. The top three earn 150, 100 and 60 ✦.</p><button class="soft-button" id="chartBack">Back to the stage</button>');
+    W.button('chartBack',stagePanel);
   }
   function friendsPanel(){W.panel('Your people','FRIENDS & REQUESTS','<div id="onlineFriends"></div>');renderFriends(get('onlineFriends'));}
   function tradePanel(trade){
@@ -255,11 +270,12 @@
       (own||state.queue.some(q=>q.user===state.self.id)?'<button class="soft-button" id="leaveSharedStage">Leave queue / stage</button>':
       '<div class="song-picker">'+state.game.songs.map(s=>`<button data-shared-song="${s.id}"><span>◉</span><div><b>${h(s.title)}</b><small>${s.bpm} BPM</small></div><em>Join queue ↗</em></button>`).join('')+'</div>')+
       (!state.game.songs.length?'<button id="sharedMakeTrack" class="primary">Make your first track</button>':'')+
-      '<p class="small-note">Songs start from a shared clock. One applause per listener; artists cannot vote on their own set. Completed sets earn capped daily rewards.</p>';
+      '<button class="soft-button" id="openChart">Weekly chart ↗</button><p class="small-note">Songs start from a shared clock. One applause per listener; artists cannot applaud their own set. Each listener’s applause pays the artist '+G.applause.credits+' ✦ once a day, up to '+G.applause.daily+' ✦ a day.</p>';
     W.button('listenShared',()=>{listen=!listen;if(listen&&state.stage)playStage(state.stage);else sharedMusic.stop();renderStageBody();});
     W.button('voteShared',()=>send('vote'));
     W.button('leaveSharedStage',()=>send('leaveQueue'));
     W.button('sharedMakeTrack',()=>W.showStudio());
+    W.button('openChart',chartPanel);
     get('sharedStage').querySelectorAll('[data-shared-song]').forEach(b=>b.onclick=()=>queueSong(b.dataset.sharedSong));
   }
   function queueSong(id){listen=true;sharedMusic.ensure().catch(()=>{});send('queue',{song:id}).then(()=>stagePanel()).catch(()=>{});}

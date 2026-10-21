@@ -1,8 +1,9 @@
 (function (root, factory) {
-  const api = factory(typeof module === 'object' && module.exports ? require('./furniture.js') : root.AfterhoursFurniture);
+  const common=typeof module === 'object' && module.exports;
+  const api = factory(common ? require('./furniture.js') : root.AfterhoursFurniture, common ? require('./wardrobe.js') : root.AfterhoursWardrobe);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.AfterhoursGame = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (F) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (F, W) {
   'use strict';
   const clone = value => JSON.parse(JSON.stringify(value));
   const uid = () => typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(36).slice(2);
@@ -10,6 +11,8 @@
   const text = (value, max = 80) => String(value ?? '').trim().slice(0, max);
   // Name-block colours for chat bubbles; each keeps white text above 4.5:1 contrast.
   const chatColors = ['#c8102e','#d6246e','#7a3fc9','#1f5fbf','#0f7a6c','#3f7d1f','#b8520a','#3a3644'];
+  // Each listener pays an artist once per UTC day; an artist earns at most `daily` credits a day from applause.
+  const applause = {credits:5, xp:3, daily:50}, chartPrizes = [150,100,60];
   const clamp = (value, min, max) => Math.max(min, Math.min(max, Number(value) || 0));
   const prices = Object.fromEntries(Object.entries(F.catalog).map(([id,item])=>[id,item.price]));
   const quests = [
@@ -42,7 +45,7 @@
       muted:Array.from({length:4},(_,i)=>!!input.muted?.[i]),created:input.created||Date.now(),updated:Date.now()};
   }
   function initial(legacy = {}) {
-    return {version:5,revision:0,profile:{id:uid(),name:'daydream',motto:'Good people. Late nights.',joined:Date.now(),xp:0,avatar:legacy.avatar||0,badges:[],chatColor:chatColors[0]},
+    return {version:5,revision:0,profile:{id:uid(),name:'daydream',motto:'Good people. Late nights.',joined:Date.now(),xp:0,avatar:legacy.avatar||0,outfit:W.normalize(legacy.outfit),badges:[],chatColor:chatColors[0]},
       coins:Number.isFinite(legacy.coins)?Math.max(0,legacy.coins):240,
       rooms:[{id:'home',name:'Your afterhours',description:'A little place to call my own.',tags:'music, hangout',lighting:'amber',door:'open',notes:[],playlist:[],event:null}],
       activeRoom:'home',items:(legacy.decor||[]).map(d=>({...d,roomId:d.placed===false?null:'home',state:true})),
@@ -65,7 +68,9 @@
     raw.songs.forEach(s=>{if(!s.id||!s.title||!Array.isArray(s.pattern)||s.pattern.length!==4||![16,32].includes(s.length)||s.pattern.some(r=>!Array.isArray(r)||r.length!==s.length||r.some(v=>v!==0&&v!==1)))throw Error('Invalid song in save.');});
     const result=clone(raw);
     result.profile.name=text(result.profile.name,20)||'daydream';result.profile.motto=text(result.profile.motto,120);result.profile.chatColor=chatColors.includes(result.profile.chatColor)?result.profile.chatColor:chatColors[0];
+    result.profile.outfit=W.normalize(result.profile.outfit);
     result.activeRoom=ids.has(result.activeRoom)?result.activeRoom:result.rooms[0].id;
+    result.awards=(Array.isArray(result.awards)?result.awards:[]).filter(a=>[1,2,3].includes(a?.rank)).slice(0,20).map(a=>({week:text(a.week,10),rank:a.rank,title:text(a.title,48)}));
     return result;
   }
   const progress = (s, q) => Array.isArray(s.stats[q.stat]) ? s.stats[q.stat].length : s.stats[q.stat]||0;
@@ -106,6 +111,7 @@
           if(!q||s.claimed.includes(q.id)||progress(s,q)<q.target)throw Error('Complete this quest before claiming its reward.');
           s.claimed.push(q.id);ledger(s,q.reward,q.name,'quest-'+q.id,now);s.profile.xp+=q.xp;break;
         }
+        case 'outfit':s.profile.outfit=payload.outfit===null?null:W.validate(payload.outfit);break;
         case 'profile':s.profile.name=text(payload.name,20)||s.profile.name;s.profile.motto=text(payload.motto,120);if(chatColors.includes(payload.chatColor))s.profile.chatColor=payload.chatColor;break;
         case 'buy': {
           if(!prices[payload.type])throw Error('That item is not in the catalog.');
@@ -152,6 +158,18 @@
           const key='performances-'+day(now),count=s.rewards[key]||0;
           s.rewards[payload.id]=true;s.rewards[key]=count+1;s.stats.performances++;s.profile.xp+=count<5?35:5;
           result=count<5?40:0;if(result)ledger(s,result,'Stage performance',payload.id,now);break;
+        }
+        // Server-only payouts: the shared-world command allow-list never forwards these two.
+        case 'applause': {
+          const from=text(payload.from,80);if(!from||!payload.id)throw Error('Unknown applause.');
+          const daily='applause-'+day(now),pair=daily+'-'+from,earned=s.rewards[daily]||0;result=0;
+          if(!s.rewards[pair]&&earned<applause.daily&&ledger(s,applause.credits,'Applause','applause-'+payload.id+'-'+from,now)){s.rewards[pair]=true;s.rewards[daily]=earned+applause.credits;s.profile.xp+=applause.xp;result=applause.credits;}
+          break;
+        }
+        case 'chartAward': {
+          const rank=Number(payload.rank),amount=chartPrizes[rank-1];if(!amount||!payload.week)throw Error('Unknown chart award.');
+          result=0;if(ledger(s,amount,'Weekly chart #'+rank,'chart-'+payload.week+'-'+rank,now)){s.awards=[{week:text(payload.week,10),rank,title:text(payload.title,48)},...(s.awards||[])].slice(0,20);result=amount;}
+          break;
         }
         case 'game': {
           if(!['tiles','quiz','snow'].includes(payload.game)||!payload.id||s.rewards[payload.id])throw Error('This round has already finished.');
@@ -222,5 +240,5 @@
       badges(s);this.state=s;this.save();return result;
     }
   }
-  return {Game,initial,validate,quests,achievements,progress,level,needs,prices,pattern,song,starterPattern,uid,day,clone,ledger,chatColors};
+  return {Game,initial,validate,quests,achievements,progress,level,needs,prices,pattern,song,starterPattern,uid,day,clone,ledger,chatColors,applause,chartPrizes};
 });

@@ -27,27 +27,59 @@ function itemReserved(db,id){
 }
 function checkItem(user,id){const item=user.game.items.find(i=>i.id===id);if(!item||item.placed!==false||item.wrapped||item.contents)throw Error('Trade only unwrapped pieces from your inventory.');return item;}
 function saveModel(user){user.game.revision++;}
+const AWAY=20000;
+// Traces collect what happened while a player was offline; `always` records it even when they are here.
+function trace(db,target,kind,text,now,always=false){
+  if(!target||(!always&&now-target.lastSeen<AWAY))return;
+  target.away=[{id:uid(),kind,text:clean(text),time:now},...(target.away||[])].slice(0,30);
+}
+export function weekKey(now){
+  const d=new Date(now);d.setUTCHours(0,0,0,0);d.setUTCDate(d.getUTCDate()+3-(d.getUTCDay()+6)%7);
+  return d.getUTCFullYear()+'-W'+String(Math.ceil(((d-Date.UTC(d.getUTCFullYear(),0,1))/86400000+1)/7)).padStart(2,'0');
+}
+// Rank by unique listeners, then plays, then whoever played it first.
+function chartTop(chart,limit=10){
+  return Object.values(chart?.entries||{}).filter(e=>e.listeners.length).sort((a,b)=>b.listeners.length-a.listeners.length||b.plays-a.plays||a.first-b.first)
+    .slice(0,limit).map((e,i)=>({rank:i+1,user:e.user,artist:e.artist,title:e.title,listeners:e.listeners.length,plays:e.plays}));
+}
+function rollChart(db,now){
+  const week=weekKey(now);if(db.chart?.week===week)return false;
+  if(db.chart){
+    const top=chartTop(db.chart,3);
+    for(const e of top){
+      const winner=db.users[e.user];if(!winner)continue;let prize=0;
+      try{prize=model(winner).dispatch('chartAward',{week:db.chart.week,rank:e.rank,title:e.title},now);}catch{}
+      const text='“'+e.title+'” finished #'+e.rank+' on the weekly chart'+(prize?' · +'+prize+' ✦':'');
+      trace(db,winner,'chart',text,now,true);winner.notifications.unshift({id:uid(),text,time:now});winner.notifications=winner.notifications.slice(0,30);
+    }
+    db.chartHistory=[{week:db.chart.week,top},...(db.chartHistory||[])].slice(0,8);
+  }
+  db.chart={week,entries:{}};return true;
+}
 export async function createGuest(db,input={},now=Date.now()){
   if(Object.keys(db.users).length>=500)throw Error('The world is at capacity. Try again later.');
   const name=clean(input.name,20)||'nightowl',id=uid(),secret=Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,'0')).join('');
-  const game=G.initial({coins:240,avatar:Math.max(0,Math.min(5,Number(input.avatar)||0)),decor:F.starter().map(item=>({...item,id:id+'-'+item.id}))});
+  const game=G.initial({coins:240,avatar:Math.max(0,Math.min(5,Number(input.avatar)||0)),outfit:input.outfit,decor:F.starter().map(item=>({...item,id:id+'-'+item.id}))});
   game.profile.id=id;game.profile.name=Object.values(db.users).some(u=>u.game.profile.name.toLowerCase()===name.toLowerCase())?name.slice(0,14)+'-'+id.slice(0,4):name;
-  db.users[id]={id,game,room:'public:0',pose:{x:5.5,y:5.5,avatar:game.profile.avatar,back:false,flip:false,seat:null,dancing:false},lastSeen:now,friendIds:[],friendRequests:[],blocked:[],notifications:[],lastChat:0};
+  db.users[id]={id,game,room:'public:0',pose:{x:5.5,y:5.5,avatar:game.profile.avatar,back:false,flip:false,seat:null,dancing:false},lastSeen:now,friendIds:[],friendRequests:[],blocked:[],notifications:[],lastChat:0,away:[],awaySeen:now};
   db.auth[await hash(secret)]=id;touch(db);return {token:secret,id};
 }
 export async function authenticate(db,token){const id=db.auth[await hash(token||'')];if(!id||!db.users[id])throw Error('Your session expired. Join the world again.');return db.users[id];}
 export function tick(db,now=Date.now()){
-  let changed=false;
+  let changed=rollChart(db,now);
   for(const user of Object.values(db.users))if(now-user.lastSeen>20000&&user.pose.seat){release(db,user);changed=true;}
   for(const [key,r] of Object.entries(db.rooms)){
     r.queue=r.queue.filter(q=>db.users[q.user]&&now-db.users[q.user].lastSeen<20000);
     if(r.stage&&now>=r.stage.end){
       const performance=r.stage,user=db.users[performance.user];r.stage=null;
       if(user){
-        try{const reward=model(user).dispatch('performance',{id:performance.id,songId:performance.song.id,elapsed:now-performance.start},now);chat(db,key,'system',user.game.profile.name+' finished “'+performance.song.title+'” · '+reward+' credits earned.');}catch{}
+        try{const reward=model(user).dispatch('performance',{id:performance.id,songId:performance.song.id,elapsed:now-performance.start},now);const count=Object.keys(performance.votes).length;chat(db,key,'system',user.game.profile.name+' finished “'+performance.song.title+'” · '+count+' applause · '+reward+' credits for the set.');}catch{}
         user.notifications.unshift({id:uid(),text:'Set complete: '+performance.song.title,time:now});
       }
-      r.history.unshift({...performance,votes:Object.keys(performance.votes).length});r.history=r.history.slice(0,15);changed=true;
+      const listeners=Object.keys(performance.votes),entries=db.chart.entries,songKey=performance.user+':'+performance.song.id;
+      const entry=entries[songKey]||(Object.keys(entries).length<200?(entries[songKey]={user:performance.user,artist:performance.artist,title:performance.song.title,listeners:[],plays:0,first:now}):null);
+      if(entry){entry.plays++;entry.title=performance.song.title;for(const id of listeners)if(!entry.listeners.includes(id))entry.listeners.push(id);}
+      r.history.unshift({...performance,votes:listeners.length});r.history=r.history.slice(0,15);changed=true;
     }
     if(!r.stage&&r.queue.length){
       const next=r.queue.shift();r.stage={...next,start:now+2000,end:now+22000,votes:{}};
@@ -81,6 +113,7 @@ function applyAction(db,user,type,p={},now=Date.now()){
       release(db,user);user.room=key;user.pose={...user.pose,x:5.5,y:5.5,seat:null,time:now};
       if(owner?.id===user.id){user.game.activeRoom=meta.id;saveModel(user);}
       if(key.startsWith('public:'))model(user).event('visited',Number(key.slice(7)));
+      if(owner&&owner.id!==user.id){const text=user.game.profile.name+' dropped by '+meta.name;if(!(owner.away||[]).some(e=>e.text===text&&now-e.time<21600000))trace(db,owner,'visit',text,now);}
       chat(db,key,'system',user.game.profile.name+' joined the room.');break;
     }
     case 'door': {
@@ -107,6 +140,7 @@ function applyAction(db,user,type,p={},now=Date.now()){
       user.pose.seat={id:seat,point,flip:!!p.flip,sitting:false};break;
     }
     case 'stand':release(db,user);break;
+    case 'awaySeen':user.awaySeen=now;break;
     case 'chat':{
       if(now-user.lastChat<700)throw Error('Give the room a moment between messages.');const text=clean(p.text,160);if(!text)break;user.lastChat=now;
       const mode=['say','shout','whisper'].includes(p.mode)?p.mode:'say',to=mode==='whisper'?p.to:null;
@@ -115,7 +149,7 @@ function applyAction(db,user,type,p={},now=Date.now()){
       if(mode!=='whisper')user.pose.bubble={text,mode,until:now+9000};break;
     }
     case 'command':{
-      const allowed=['checkin','quest','profile','buy','room','roomSettings','favorite','song','deleteSong','disc','adopt','pet','note','deleteNote','blueprint','restoreBlueprint','itemAction'];
+      const allowed=['checkin','quest','profile','outfit','buy','room','roomSettings','favorite','song','deleteSong','disc','adopt','pet','note','deleteNote','blueprint','restoreBlueprint','itemAction'];
       if(p.type==='game'){
         const round=user.arcade?.[p.payload?.id];if(!round||round.game!==p.payload.game)throw Error('Start a new arcade round first.');
         result=model(user).dispatch('game',{...p.payload,elapsed:now-round.start},now);delete user.arcade[p.payload.id];break;
@@ -170,11 +204,14 @@ function applyAction(db,user,type,p={},now=Date.now()){
     case 'vote':{
       const performance=current.stage;if(!performance||performance.user===user.id||now<performance.start||now>=performance.end)throw Error('Applaud another artist while they are playing.');
       if(performance.votes[user.id])throw Error('You already applauded this performance.');
-      performance.votes[user.id]=true;break;
+      performance.votes[user.id]=true;
+      const artist=db.users[performance.user];
+      if(artist){const paid=model(artist).dispatch('applause',{id:performance.id,from:user.id},now);artist.notifications.unshift({id:uid(),text:user.game.profile.name+' applauded “'+performance.song.title+'”'+(paid?' · +'+paid+' ✦':''),time:now});artist.notifications=artist.notifications.slice(0,30);}
+      break;
     }
     case 'friend': {
       const other=db.users[p.user];if(!other||other.id===user.id)throw Error('Choose another player.');
-      if(!other.friendRequests.includes(user.id)&&!other.friendIds.includes(user.id))other.friendRequests.push(user.id);break;
+      if(!other.friendRequests.includes(user.id)&&!other.friendIds.includes(user.id)){other.friendRequests.push(user.id);trace(db,other,'friend',user.game.profile.name+' sent you a friend request',now);}break;
     }
     case 'answerFriend':{
       const other=db.users[p.user];if(!other||!user.friendRequests.includes(other.id))throw Error('Friend request not found.');
@@ -227,14 +264,16 @@ export function action(db,user,type,p={},now=Date.now()){
 }
 export function snapshot(db,user,now=Date.now()){
   const current=roomData(db,user.room),owner=roomOwner(db,user.room),meta=ownedRoom(db,user.room);
-  const publicUser=u=>({id:u.id,name:u.game.profile.name,motto:u.game.profile.motto,chatColor:u.game.profile.chatColor,level:G.level(u.game),avatar:u.pose.avatar,online:now-u.lastSeen<20000,room:u.room});
+  const publicUser=u=>({id:u.id,name:u.game.profile.name,motto:u.game.profile.motto,chatColor:u.game.profile.chatColor,level:G.level(u.game),avatar:u.pose.avatar,outfit:G.clone(u.game.profile.outfit||null),online:now-u.lastSeen<20000,room:u.room,awards:(u.game.awards||[]).slice(0,3)});
   const peers=Object.values(db.users).filter(u=>u.id!==user.id&&u.room===user.room&&now-u.lastSeen<20000&&!user.blocked.includes(u.id)).map(u=>({...publicUser(u),pose:u.pose}));
   const trades=Object.values(db.trades).filter(t=>t.participants.includes(user.id)&&now-t.updated<600000).sort((a,b)=>b.updated-a.updated).map(t=>({...t,people:t.participants.map(id=>publicUser(db.users[id])),items:Object.fromEntries(t.participants.map(id=>[id,t.offers[id].map(itemId=>db.users[id].game.items.find(i=>i.id===itemId)).filter(Boolean).map(i=>({id:i.id,type:i.type}))]))}));
   return {revision:db.revision,time:now,self:publicUser(user),game:user.game,peers,room:user.room,
     roomView:owner&&owner.id!==user.id?{...meta,key:user.room,owner:owner.game.profile.name,ownerId:owner.id,items:owner.game.items.filter(i=>i.roomId===meta.id&&i.placed!==false)}:null,
     chats:current.chat.filter(m=>(m.mode!=='whisper'||m.from===user.id||m.to===user.id)&&(!m.from||!user.blocked.includes(m.from))&&(m.mode!=='say'||!m.from||m.from===user.id||!db.users[m.from]||Math.hypot(db.users[m.from].pose.x-user.pose.x,db.users[m.from].pose.y-user.pose.y)<5)),
     seats:current.seats,stage:current.stage,queue:current.queue,history:current.history,
-    friends:user.friendIds.map(id=>db.users[id]).filter(Boolean).map(publicUser),friendRequests:user.friendRequests.map(id=>db.users[id]).filter(Boolean).map(publicUser),
+    friends:user.friendIds.map(id=>db.users[id]).filter(Boolean).map(u=>({...publicUser(u),lastSeen:u.lastSeen})),
+    away:(user.away||[]).filter(e=>e.time>(user.awaySeen||0)),
+    chart:{week:db.chart?.week||weekKey(now),top:chartTop(db.chart),last:db.chartHistory?.[0]||null},friendRequests:user.friendRequests.map(id=>db.users[id]).filter(Boolean).map(publicUser),
     rooms:Object.values(db.users).flatMap(u=>u.game.rooms.filter(r=>r.door!=='private'||u.id===user.id).map(r=>({key:'home:'+u.id+':'+r.id,name:r.name,description:r.description,owner:u.game.profile.name,door:r.door,count:Object.values(db.users).filter(p=>p.room==='home:'+u.id+':'+r.id&&now-p.lastSeen<20000).length}))),
     doorRequests:owner?.id===user.id?current.requests.map(id=>db.users[id]).filter(Boolean).map(publicUser):[],trades,notifications:user.notifications};
 }

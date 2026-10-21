@@ -3,7 +3,7 @@
   const W=window.AfterhoursWorld,G=AfterhoursGame,base=window.AFTERHOURS_API||(location.protocol.startsWith('http')?location.origin:'');
   const get=id=>document.getElementById(id),h=W.h;
   let ready=false,online=false,token='',state=null,solo=null,remote=null,applying=false,joining=false,lastPose=0,lastResponse=0,polling=false,lastGameRevision=-1,managed=false,account=null,retryAfter=0;
-  let requestChain=Promise.resolve(),pending=0,lastChatIds=new Set(),seenNotifications=new Set(),rendered=new Map(),extrasTimer=null,lastTradeStatus='',lastStage='',listen=false,networkErrors=0;
+  let requestChain=Promise.resolve(),pending=0,lastChatIds=new Set(),seenNotifications=new Set(),seenDoorRequests=new Set(),rendered=new Map(),extrasTimer=null,lastTradeStatus='',lastStage='',listen=false,networkErrors=0;
   let rosterSignature='',friendsSignature='',stageSignature='',poseSignature='';
   const sharedMusic=new AfterhoursMusic(),originalDispatch=W.game.dispatch.bind(W.game),originalSave=W.game.save.bind(W.game),oldEnter=enterRoom,oldSeat=useSeat,oldStand=standUp,oldEditing=startEditing;
   async function request(path,body,auth=true){
@@ -32,6 +32,12 @@
       lastGameRevision=next.game.revision;applying=true;W.applyState(G.clone(next.game));applying=false;
     }
     if(!joining&&previous&&previous.room!==next.room)renderRoom();
+    else if(previous&&previous.room===next.room){
+      const before=new Map(previous.peers.map(p=>[p.id,p])),present=new Set(next.peers.map(p=>p.id));
+      for(const p of next.peers)if(!before.has(p.id)){W.markArrival(p.id);AfterhoursView.cue('arrive');W.setRemoteChat('system',p.name+' walked in.');}
+      for(const [id,p] of before)if(!present.has(id))W.setRemoteChat('system',p.name+' left.');
+    }
+    for(const request of next.doorRequests||[])if(!seenDoorRequests.has(request.id)){seenDoorRequests.add(request.id);AfterhoursView.cue('knock');}
     else if(remote){W.sync();get('roomTitle').textContent=remote.name;get('roomMeta').textContent='by '+remote.owner+' · shared room';}
     get('connectionLabel').textContent='SHARED WORLD';get('guestCount').textContent=next.peers.length+1;
     $('.people-strip small').textContent=next.peers.length+' connected · residents nearby';
@@ -168,7 +174,7 @@
   async function joinRoom(key){
     if(joining)return false;joining=true;try{
       const out=await send('joinRoom',{key});
-      if(out.result?.waiting){W.toast('Doorbell rung. The host will answer shortly.');return false;}
+      if(out.result?.waiting){AfterhoursView.cue('ring');W.toast('Doorbell rung. The host will answer shortly.');return false;}
       renderRoom();W.close();return true;
     }catch{return false;}finally{joining=false;}
   }
@@ -269,7 +275,7 @@
     if(peer){e.stopImmediatePropagation();playerPanel(peer.id);}
   },true);
   function drawPeer(peer,t){
-    const p=rendered.get(peer.id)||peer.pose,scene=W.getScene(),pose=peer.pose,index=peer.avatar,[x,y]=scene.iso(p.x,p.y);
+    const p=rendered.get(peer.id)||peer.pose,scene=W.getScene(),pose=peer.pose,index=peer.avatar,[x,y]=scene.iso(p.x,p.y);W.drawArrival(peer.id,x,y);
     W.ctx.save();
     if(pose.seat?.sitting){
       const crop=W.seatedCrops[index],height=118,width=crop[2]/crop[3]*height;
@@ -277,7 +283,7 @@
       W.ctx.drawImage(W.seatedImage,...crop,-width*.28,-height*.62,width,height);W.ctx.restore();
       W.drawAvatarLabels({id:peer.id,name:peer.name,bubble:pose.bubble?.text,bubbleMode:pose.bubble?.mode,until:pose.bubble?.until},pose.seat.point[0],pose.seat.point[1]+height*.38,false);return;
     }
-    W.ctx.translate(x,y+(pose.dancing&&!reducedMotion?Math.sin(t/115)*4:0));
+    const step=pose.dancing&&!reducedMotion?AfterhoursView.dancePose(t):{bob:0,tilt:0};W.ctx.translate(x,y+step.bob*.8);if(step.tilt)W.ctx.rotate(step.tilt);
     W.drawWalker(p,t,{...pose,moving:p.moving,phase:p.phase||0},index);
     W.ctx.restore();W.drawAvatarLabels({id:peer.id,name:peer.name,bubble:pose.bubble?.text,bubbleMode:pose.bubble?.mode,until:pose.bubble?.until},x,y,false);
     W.ctx.fillStyle='#b5e8b2';W.ctx.beginPath();W.ctx.arc(x+22,y+26,3,0,Math.PI*2);W.ctx.fill();

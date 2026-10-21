@@ -22,26 +22,61 @@
       this.x+=dx/this.scale*amount;this.y+=dy/this.scale*amount;this.constrain();
     }
   }
+  // Bubbles stay where they were spoken and climb one line per new message in the room,
+  // or every few seconds when it is quiet, so a conversation reads as one rising column.
   class Speech{
-    constructor(){this.groups=new Map();}
-    add(id,name,text,until,mode='say',now=Date.now()){
+    constructor(){this.entries=[];this.last=new Map();this.step=0;this.stepped=0;}
+    add(id,name,text,until,mode='say',now=Date.now(),at=null){
       if(!text||until<=now||mode==='whisper')return;
-      let group=this.groups.get(id);
-      if(!group){group={id,name,entries:[],last:''};this.groups.set(id,group);}
       const key=until+':'+text;
-      if(group.last===key)return;
-      group.last=key;group.name=name;
-      group.entries.push({key,text:String(text).slice(0,160),until,mode});
-      group.entries=group.entries.filter(e=>e.until>now).slice(-2);
+      if(this.last.get(id)===key)return;
+      this.last.set(id,key);this.step++;this.stepped=now;
+      this.entries.push({key:id+'|'+key,id,name,text:String(text).slice(0,160),until,mode,born:this.step,at});
+      this.entries=this.entries.filter(e=>e.until>now).slice(-12);
     }
     active(now=Date.now()){
-      for(const [id,g] of this.groups){g.entries=g.entries.filter(e=>e.until>now);if(!g.entries.length)this.groups.delete(id);}
-      return [...this.groups.values()];
+      this.entries=this.entries.filter(e=>e.until>now);
+      if(this.entries.length&&now-this.stepped>=Speech.idle){this.step++;this.stepped=now;}
+      return this.entries.map(e=>({...e,lift:this.step-e.born}));
     }
-    clear(){this.groups.clear();}
+    clear(){this.entries=[];this.last.clear();}
+  }
+  Speech.idle=4000;
+  // Gestures hold each pose for 125 ms (8 fps), like sprite animation, while walking stays smooth.
+  const DANCE=[[0,-.06],[-5,0],[0,.06],[-5,0]];
+  const dancePose=t=>{const [bob,tilt]=DANCE[Math.floor(t/125)%4];return{bob,tilt};};
+  const wavePose=t=>Math.floor(t/125)%2?.35:-.2;
+  // Ordered dither: quantise a 0..1 intensity to a few steps with a 4x4 Bayer threshold per cell.
+  const BAYER=[0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5];
+  const dither=(x,y,value,levels=3)=>Math.min(1,Math.floor(value*levels+(BAYER[(y&3)*4+(x&3)]+.5)/16)/levels);
+  const pools=new Map();
+  function lightPool(color='255,170,54',cells=64){
+    const key=color+':'+cells;if(pools.has(key))return pools.get(key);
+    const canvas=document.createElement('canvas');canvas.width=canvas.height=cells;
+    const g=canvas.getContext('2d'),img=g.createImageData(cells,cells),[r,gr,b]=color.split(',').map(Number);
+    for(let y=0;y<cells;y++)for(let x=0;x<cells;x++){
+      const f=Math.max(0,1-Math.hypot(x+.5-cells/2,y+.5-cells/2)/(cells/2)),i=(y*cells+x)*4;
+      img.data[i]=r;img.data[i+1]=gr;img.data[i+2]=b;img.data[i+3]=Math.round(dither(x,y,f*f)*255);
+    }
+    g.putImageData(img,0,0);pools.set(key,canvas);return canvas;
+  }
+  // Short cues mixed around -18 dB, so arrivals are heard without competing with the music.
+  const CUES={arrive:['square',[[659,0],[988,.09]]],pop:['square',[[523,0],[784,.05]]],ring:['square',[[784,0],[622,.24]]],knock:['triangle',[[120,0],[120,.16]]]};
+  let audio=null;
+  function cue(kind){
+    if(!CUES[kind]||(navigator.userActivation&&!navigator.userActivation.hasBeenActive))return;
+    try{
+      audio??=new (window.AudioContext||window.webkitAudioContext)();if(audio.state==='suspended')audio.resume().catch(()=>{});
+      const [type,notes]=CUES[kind],now=audio.currentTime;
+      for(const [freq,at] of notes){
+        const o=audio.createOscillator(),g=audio.createGain();o.type=type;o.frequency.value=freq;
+        g.gain.setValueAtTime(.0001,now+at);g.gain.exponentialRampToValueAtTime(.125,now+at+.008);g.gain.exponentialRampToValueAtTime(.0001,now+at+.18);
+        o.connect(g).connect(audio.destination);o.start(now+at);o.stop(now+at+.2);
+      }
+    }catch{}
   }
   function mount(canvas){
-    const camera=new Camera(),speech=new Speech(),nodes=new Map(),anchors=new Map();
+    const camera=new Camera(),speech=new Speech(),nodes=new Map(),LINE=30;
     const overlay=document.createElement('div');overlay.className='speech-layer';overlay.setAttribute('aria-hidden','true');canvas.parentElement.append(overlay);
     const resize=()=>{
       const rect=canvas.getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,2);
@@ -51,41 +86,36 @@
     new ResizeObserver(resize).observe(canvas);resize();
     if(camera.width<500){camera.zoom=2.4;camera.constrain();}
     function begin(ctx,x,y,dt,reduced){
-      camera.track(x,y-60,dt,reduced);anchors.clear();
+      camera.track(x,y-60,dt,reduced);
       ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,canvas.width,canvas.height);
       ctx.setTransform(canvas.width/camera.width,0,0,canvas.height/camera.height,0,0);
       ctx.translate(camera.width/2,camera.height/2);ctx.scale(camera.scale,camera.scale);ctx.translate(-camera.x,-camera.y);
     }
     function note(p,x,y,self){
       const id=self?'self':p.id||'resident:'+p.name;
-      anchors.set(id,{...camera.project(x,y-125),self});
-      speech.add(id,p.name,p.bubble,p.until,p.bubbleMode);
+      speech.add(id,p.name,p.bubble,p.until,p.bubbleMode,Date.now(),{x,y:y-125});
     }
     function end(){
-      const active=speech.active(),visible=new Set(),placed=[];
-      for(const group of active){
-        const anchor=anchors.get(group.id);if(!anchor)continue;visible.add(group.id);
-        let node=nodes.get(group.id);
-        if(!node){node=document.createElement('div');node.className='speech-stack';overlay.append(node);nodes.set(group.id,node);}
-        const signature=group.entries.map(e=>e.key).join('|');
-        if(node.dataset.signature!==signature){
-          node.replaceChildren();node.dataset.signature=signature;
-          for(const entry of group.entries){
-            const bubble=document.createElement('div');bubble.className='speech-bubble'+(anchor.self?' own':'')+(entry.mode==='shout'?' shout':'');
-            const name=document.createElement('b'),text=document.createElement('span');name.textContent=group.name;text.textContent=entry.text;bubble.append(name,text);node.append(bubble);
-          }
+      const active=speech.active().reverse(),visible=new Set(),placed=[];
+      // Newest first: older bubbles yield upward, out through the top of the room.
+      for(const entry of active){
+        if(!entry.at)continue;visible.add(entry.key);
+        let node=nodes.get(entry.key);
+        if(!node){
+          node=document.createElement('div');node.className='speech-bubble'+(entry.id==='self'?' own':'')+(entry.mode==='shout'?' shout':'');
+          const name=document.createElement('b'),text=document.createElement('span');name.textContent=entry.name;text.textContent=entry.text;node.append(name,text);overlay.append(node);nodes.set(entry.key,node);
         }
-        const w=node.offsetWidth,h=node.offsetHeight;
-        const x=Math.max(8,Math.min(camera.width-w-8,anchor.x-w/2));
-        let y=Math.max(8,Math.min(camera.height-h-8,anchor.y-h-12));
-        for(const other of placed){if(x<other.x+other.w+8&&x+w+8>other.x&&y<other.y+other.h+8&&y+h+8>other.y)y=Math.max(8,other.y-h-10);}
-        node.style.transform=`translate(${Math.round(x)}px,${Math.round(y)}px)`;
-        node.style.setProperty('--tail',Math.max(15,Math.min(w-15,anchor.x-x))+'px');placed.push({x,y,w,h});
+        const p=camera.project(entry.at.x,entry.at.y),w=node.offsetWidth,h=node.offsetHeight;
+        const x=Math.max(8,Math.min(camera.width-w-8,p.x-w/2)),base=Math.min(camera.height-h-8,p.y-h-12);
+        let y=base-entry.lift*LINE;
+        for(const other of placed){if(x<other.x+other.w+8&&x+w+8>other.x&&y<other.y+other.h+6&&y+h+6>other.y)y=other.y-h-6;}
+        node.style.transform=`translate(${Math.round(x)}px,${Math.round(base)}px)`;node.style.translate=`0 ${Math.round(y-base)}px`;
+        node.classList.toggle('risen',y<base);node.style.setProperty('--tail',Math.max(15,Math.min(w-15,p.x-x))+'px');placed.push({x,y,w,h});
       }
       for(const [id,node] of nodes)if(!visible.has(id)){node.remove();nodes.delete(id);}
     }
     function reset(){speech.clear();nodes.forEach(n=>n.remove());nodes.clear();camera.x=750;camera.y=530;camera.follow=false;camera.constrain();}
     return{camera,begin,note,end,reset,resize};
   }
-  return{Camera,Speech,mount};
+  return{Camera,Speech,mount,dancePose,wavePose,dither,lightPool,cue};
 });

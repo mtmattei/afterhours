@@ -18,15 +18,30 @@ test('the stage camera stays fixed unless follow is explicitly enabled',()=>{
  c.x=-10000;c.y=10000;c.constrain();
  assert.ok(c.x>=0&&c.x<=1500&&c.y>=0&&c.y<=1000);
 });
-test('speech preserves full messages, stacks two, expires and keeps whispers private',()=>{
+test('speech preserves full messages, expires and keeps whispers private',()=>{
  const s=new Speech(),message='A'.repeat(160);
  s.add('a','Alice',message,10000,'say',1000);s.add('a','Alice',message,10000,'say',1000);
- assert.equal(s.active(1000)[0].entries.length,1);assert.equal(s.active(1000)[0].entries[0].text,message);
- s.add('a','Alice','second',11000,'say',2000);s.add('a','Alice','third',12000,'shout',3000);
- assert.deepEqual(s.active(3000)[0].entries.map(e=>e.text),['second','third']);
- s.add('b','Bob','private',12000,'whisper',3000);assert.equal(s.active(3000).length,1);
- assert.equal(s.active(11000)[0].entries.length,1);assert.deepEqual(s.active(12000),[]);
- s.add('a','Alice','new room',15000,'say',13000);s.clear();assert.deepEqual(s.active(13000),[]);
+ assert.equal(s.active(1000).length,1);assert.equal(s.active(1000)[0].text,message);
+ s.add('b','Bob','private',12000,'whisper',1000);assert.equal(s.active(1000).length,1);
+ assert.deepEqual(s.active(10000),[]);
+ s.add('a','Alice','new room',15000,'say',13000,{x:1,y:2});assert.deepEqual(s.active(13000)[0].at,{x:1,y:2});
+ s.clear();assert.deepEqual(s.active(13000),[]);
+});
+test('speech bubbles climb one line per new message and every four quiet seconds',()=>{
+ const s=new Speech(),lifts=now=>Object.fromEntries(s.active(now).map(e=>[e.text,e.lift]));
+ s.add('a','Alice','first',20000,'say',1000);assert.deepEqual(lifts(1000),{first:0});
+ s.add('b','Bob','second',20000,'say',2000);assert.deepEqual(lifts(2000),{first:1,second:0});
+ s.add('a','Alice','third',20000,'shout',2500);assert.deepEqual(lifts(2500),{first:2,second:1,third:0});
+ assert.deepEqual(lifts(6400),{first:2,second:1,third:0});
+ assert.deepEqual(lifts(6500),{first:3,second:2,third:1});
+ assert.deepEqual(lifts(7000),{first:3,second:2,third:1});
+});
+test('gestures hold each pose for 125 ms and the lamp dither stays within its levels',()=>{
+ const {dancePose,wavePose,dither}=require('../dist/room-view.js');
+ assert.deepEqual(dancePose(0),dancePose(124));assert.notDeepEqual(dancePose(124),dancePose(125));
+ assert.deepEqual(dancePose(0),dancePose(500));assert.equal(wavePose(10),wavePose(120));assert.notEqual(wavePose(120),wavePose(130));
+ for(let y=0;y<4;y++)for(let x=0;x<4;x++){assert.equal(dither(x,y,0),0);assert.equal(dither(x,y,1),1);assert.ok([0,1/3,2/3,1].includes(dither(x,y,.5)));}
+ let lit=0;for(let y=0;y<4;y++)for(let x=0;x<4;x++)lit+=dither(x,y,.5);assert.ok(Math.abs(lit/16-.5)<.1);
 });
 test('every new catalog piece purchases at its authoritative price and survives save validation',()=>{
  const entries=Object.entries(F.catalog).filter(([,v])=>v.atlas);

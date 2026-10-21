@@ -559,7 +559,7 @@
   drawFurniture=function(item,preview=false){
     const c=Furniture.catalog[item.type];
     ctx.save();if(item.state===false&&(['lamp','table'].includes(item.type)||c.use==='light'))ctx.filter='brightness(.4)';legacyDrawFurniture(item,preview);ctx.restore();
-    if(!preview&&item.state!==false&&(['lamp','table'].includes(item.type)||c.use==='light')){const g=furnitureGeometry(item);ctx.save();ctx.globalCompositeOperation='screen';const light=ctx.createRadialGradient(g.x,g.y-g.h*.6,1,g.x,g.y-g.h*.6,60);light.addColorStop(0,'#ffaa3622');light.addColorStop(1,'#ffaa3600');ctx.fillStyle=light;ctx.fillRect(g.x-60,g.y-g.h*.6-60,120,120);ctx.restore();}
+    if(!preview&&item.state!==false&&(['lamp','table'].includes(item.type)||c.use==='light')){const g=furnitureGeometry(item),pool=AfterhoursView.lightPool();ctx.save();ctx.globalCompositeOperation='screen';ctx.imageSmoothingEnabled=false;ctx.globalAlpha=.3;ctx.drawImage(pool,g.x-100,g.y-50,200,100);ctx.globalAlpha=.36;ctx.drawImage(pool,g.x-70,g.y-g.h*.6-70,140,140);ctx.restore();}
     if(!preview){const g=furnitureGeometry(item);if(item.type==='dice'&&item.value)label(String(item.value),g.x,g.y-g.h-9,18,'#f5edce');if(item.type==='portal'&&item.destination)label('LINKED',g.x,g.y-g.h-10,10,'#dcb1ff');}
   };
 
@@ -614,7 +614,7 @@
     game,saveWorld,sync,toast,panel,close,h,button,buttons,room,roomKey,visitRoom,enterRoom,player,walker,canvas,ctx,
     getScene:()=>({personal,roomIndex,activeRoomId,decor,spriteIndex,seating,iso,roomSeats:roomSeats()}),
     setRemoteChat:(name,text)=>logMessage(name,text),
-    spriteImage,backImage,seatedImage,seatedCrops,drawAvatarLabels,drawWalker,avatarDepth,
+    spriteImage,backImage,seatedImage,seatedCrops,drawAvatarLabels,drawWalker,avatarDepth,markArrival,drawArrival,
     setSeat:offers=>useSeat(offers),stand:()=>standUp(),navigationOptions,refreshWhispers,
     openJournal:journal,download,stagePanel,playSong,stopMusic,
     openCatalog:catalog,openNavigator,

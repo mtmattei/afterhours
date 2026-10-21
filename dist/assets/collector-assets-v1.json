@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "created": "2026-10-20",
+  "generator": "OpenAI built-in image_gen",
+  "prompts": "../../COLLECTOR-ART-PROMPTS.txt",
+  "status": "Original source artwork. Catalog placement and avatar layering integration are in progress.",
+  "assets": [
+    {
+      "file": "wardrobe-heads-v1.png",
+      "collection": "modular-avatar",
+      "rows": [
+        "Tousled crop",
+        "Cloud curls",
+        "Blunt bob",
+        "Long braids",
+        "Side-part shag",
+        "High bun"
+      ],
+      "columns": [
+        "front",
+        "back"
+      ]
+    },
+    {
+      "file": "wardrobe-tops-v1.png",
+      "collection": "modular-avatar",
+      "rows": [
+        "Pocket tee",
+        "Zip hoodie",
+        "Varsity jacket",
+        "Open overshirt"
+      ],
+      "columns": [
+        "front",
+        "back",
+        "seated"
+      ]
+    },
+    {
+      "file": "wardrobe-bottoms-v1.png",
+      "collection": "modular-avatar",
+      "rows": [
+        "Straight jeans",
+        "Cargo trousers",
+        "Wide-leg trousers",
+        "Utility shorts"
+      ],
+      "columns": [
+        "front",
+        "back",
+        "seated"
+      ]
+    },
+    {
+      "file": "furniture-fantasy-a-v1.png",
+      "collection": "fantasy-collectors",
+      "order": "Left to right, top row then bottom row",
+      "pieces": [
+        "Mooncradle sofa",
+        "Aurora decks",
+        "Orbitarium",
+        "Astral koi fountain",
+        "Meteor jukebox",
+        "Eclipse throne",
+        "Cloud sleeper",
+        "Event horizon table",
+        "Constellation chess table",
+        "Prism grand"
+      ]
+    },
+    {
+      "file": "furniture-fantasy-b-v1.png",
+      "collection": "fantasy-collectors",
+      "order": "Left to right, top row then bottom row",
+      "pieces": [
+        "Ember dragon bonsai",
+        "Lunar gate",
+        "Cassette skyline",
+        "Midnight claw",
+        "Glasswing sanctuary",
+        "Sunken palace aquarium",
+        "Vinyl monolith",
+        "Medusa lamp",
+        "Winterglass bench",
+        "Coral cathedral divider"
+      ]
+    },
+    {
+      "file": "furniture-man-cave-a-v1.png",
+      "collection": "man-cave",
+      "order": "Left to right, top row then bottom row",
+      "pieces": [
+        "Listening throne",
+        "Wall of sound",
+        "Clear-cut DJ booth",
+        "Master tape cabinet",
+        "Chrome mixtape",
+        "Cherry channel sofa",
+        "Apex racing cockpit",
+        "Glassworks pinball",
+        "Emerald billiards",
+        "Touring flight-case table"
+      ]
+    },
+    {
+      "file": "furniture-man-cave-b-v1.png",
+      "collection": "man-cave",
+      "order": "Left to right, top row then bottom row",
+      "pieces": [
+        "Walnut foosball",
+        "Double-player cocktail arcade",
+        "Copper-lever espresso bar",
+        "Oxblood jukebox",
+        "Backstage guitar vitrine",
+        "Sneaker archive",
+        "Emerald glass-block bar",
+        "Workshop wheel clock",
+        "Vinyl carousel",
+        "Racing-green tool chest"
+      ]
+    }
+  ]
+}

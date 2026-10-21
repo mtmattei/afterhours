@@ -3,7 +3,8 @@
  'use strict';
  const W=AfterhoursWardrobe, images={},parts=new Map(),bodies=new Map();
  const files={head:'wardrobe-heads-v1.png',top:'wardrobe-tops-v1.png',bottom:'wardrobe-bottoms-v1.png'};
- const ready=Promise.all(Object.entries(files).map(([id,file])=>new Promise(resolve=>{const img=new Image();images[id]=img;img.onload=resolve;img.onerror=resolve;img.src='assets/'+file;})));
+ let ready=null;
+ const load=()=>ready??=Promise.all(Object.entries(files).map(([id,file])=>new Promise(resolve=>{const img=new Image();images[id]=img;img.onload=resolve;img.onerror=resolve;img.src='assets/'+file;})));
  const heads=[[[244,12,240,235],[551,10,231,234]],[[176,253,326,258],[529,252,300,258]],[[201,511,278,227],[552,517,239,220]],[[210,738,247,252],[548,742,244,248]],[[199,990,298,244],[543,990,250,241]],[[242,1236,239,279],[561,1239,229,277]]];
  const headPins=[[[328,241],[660,238]],[[330,500],[670,500]],[[333,728],[668,730]],[[339,965],[672,968]],[[330,1221],[665,1221]],[[333,1496],[670,1488]]];
  const tops=[[[55,24,267,317],[401,20,286,317],[757,46,277,264]],[[56,348,281,361],[398,349,292,358],[762,377,286,299]],[[52,709,293,351],[400,711,291,344],[753,737,296,291]],[[52,1067,286,360],[398,1065,292,351],[748,1096,310,292]]];
@@ -15,7 +16,7 @@
  function remember(cache,key,value,max){cache.set(key,value);if(cache.size>max)cache.delete(cache.keys().next().value);return value;}
  function part(kind,index,pose,colour,skin){
   const key=[kind,index,pose,colour,skin].join(':');if(parts.has(key))return parts.get(key);
-  const crop=({head:heads,top:tops,bottom:bottoms})[kind][index][pose],img=images[kind];if(!img.complete||!img.naturalWidth)return null;
+  const crop=({head:heads,top:tops,bottom:bottoms})[kind][index][pose],img=images[kind];if(!img){load();return null;}if(!img.complete||!img.naturalWidth)return null;
   const c=document.createElement('canvas');[c.width,c.height]=crop.slice(2);const ctx=c.getContext('2d',{willReadFrequently:true});ctx.drawImage(img,...crop,0,0,c.width,c.height);
   const pixels=ctx.getImageData(0,0,c.width,c.height),d=pixels.data,cloth=rgb(colour),flesh=rgb(skin);
   for(let i=0;i<d.length;i+=4){if(!d[i+3])continue;const r=d[i],g=d[i+1],b=d[i+2],l=(r*.3+g*.59+b*.11),warm=r-g>18&&g-b>10&&(r-Math.min(g,b))/Math.max(1,r)>.35;
@@ -34,9 +35,13 @@
   if(!head||!top||!bottom)return null;
   const c=document.createElement('canvas');c.width=220;c.height=340;const ctx=c.getContext('2d');ctx.scale(2,2);ctx.translate(55,130);ctx.imageSmoothingEnabled=true;
   const place=(image,crop,pin,scale,x,y)=>ctx.drawImage(image,x-(pin[0]-crop[0])*scale,y-(pin[1]-crop[1])*scale,image.width*scale,image.height*scale);
-  place(bottom,bottoms[bi][p],bottomPins[bi][p],(sit?42:52)/(bottoms[bi][p][3]-(bottomPins[bi][p][1]-bottoms[bi][p][1])),sit?-3:0,sit?-4:-49);
-  place(top,tops[ti][p],topPins[ti][p],(sit?43:43)/topLengths[ti][p],0,sit?-52:-91);
-  place(head,heads[hi][hp],headPins[hi][hp],.15,0,sit?-52:-91);
+  const bottomScale=(sit?42:52)/(bottoms[bi][p][3]-(bottomPins[bi][p][1]-bottoms[bi][p][1])),topScale=43/topLengths[ti][p];
+  const bottomY=sit?-4:-49,waist=bottomY-(bottomPins[bi][p][1]-bottoms[bi][p][1])*bottomScale,hem=(sit?-52:-91)-(topPins[ti][p][1]-tops[ti][p][1])*topScale+top.height*topScale;
+  // Short tops on a seated body can stop above the waistband; lower the torso until they overlap by 6 px.
+  const neck=(sit?-52:-91)+Math.max(0,waist+6-hem);
+  place(bottom,bottoms[bi][p],bottomPins[bi][p],bottomScale,sit?-3:0,bottomY);
+  place(top,tops[ti][p],topPins[ti][p],topScale,0,neck);
+  place(head,heads[hi][hp],headPins[hi][hp],.15,0,neck);
   return remember(bodies,key,c,64);
  }
  function draw(ctx,outfit,{back=false,flip=false,seated=false,moving=false,phase=0,reducedMotion=false}={}){
@@ -53,5 +58,5 @@
   if(portrait)ctx.drawImage(art,40,0,140,160,0,0,canvas.width,canvas.height);
   else{const scale=Math.min(canvas.width/125,canvas.height/170);ctx.save();ctx.translate(canvas.width/2,canvas.height*.83);ctx.scale(scale,scale);draw(ctx,outfit,{back:pose==='back',seated:pose==='seated'});ctx.restore();}
  }
- window.AfterhoursAvatar={ready,draw,preview};
+ window.AfterhoursAvatar={load,draw,preview};
 })();

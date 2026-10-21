@@ -23,9 +23,16 @@
   const roomKey=()=>window.AfterhoursOnline?.remoteRoom()?'shared:'+room().key:personal?'my:'+activeRoomId:'public:'+roomIndex;
   const legacyPersist=persist,legacyEnter=enterRoom,legacyWalk=walkTo,legacySeat=useSeat,legacyLook=look,legacyStand=standUp;
   function sync(){
-    coins=game.state.coins;player.name=game.state.profile.name;player.chatColor=game.state.profile.chatColor;
+    coins=game.state.coins;player.name=game.state.profile.name;player.chatColor=game.state.profile.chatColor;outfit=game.state.profile.outfit||null;paintPortrait($('.profile-art'));
     decor=window.AfterhoursOnline?.remoteRoom()?.items||game.state.items.filter(i=>i.placed===false||i.roomId===activeRoomId);
     updateHUD();
+  }
+  // Outfit wearers get a painted portrait; everyone else keeps the classic sprite strip.
+  function paintPortrait(el){
+    if(!el)return;const look=game.state.profile.outfit;el.classList.toggle('custom-avatar',!!look);
+    let canvas=el.querySelector('canvas');if(!look){canvas?.remove();return;}
+    if(!canvas){canvas=document.createElement('canvas');canvas.width=140;canvas.height=160;el.append(canvas);}
+    AfterhoursAvatar.load().then(()=>AfterhoursAvatar.preview(canvas,look,'front',true));
   }
   function saveWorld(){
     if(window.AfterhoursOnline?.remoteRoom())return;
@@ -144,6 +151,7 @@
     get('profileForm').onchange=e=>{if(e.target.name==='chatColor')get('chatPreview').style.setProperty('--name',e.target.value);};
     get('profileForm').onsubmit=e=>{e.preventDefault();if(act('profile',{name:get('displayName').value,motto:get('motto').value,chatColor:get('profileForm').querySelector('[name=chatColor]:checked')?.value},'Profile saved.').ok){player.name=game.state.profile.name;player.chatColor=game.state.profile.chatColor;profile();}};
     button('profileLook',()=>look());
+    paintPortrait(get('modalBody').querySelector('.large-avatar'));
     button('exportSave',()=>{saveWorld();download(new Blob([JSON.stringify(game.state,null,2)],{type:'application/json'}),'afterhours-save.json');});
     get('importSave').onchange=async e=>{
       const file=e.target.files[0];if(!file)return;
@@ -160,7 +168,41 @@
   }
   function restoreSave(next){localStorage.setItem('afterhours-v5-backup',JSON.stringify(game.state));game.state=next;activeRoomId=next.activeRoom;spriteIndex=next.profile.avatar||0;game.save();sync();draft=copy(next.draft);resetPet();visitRoom(activeRoomId);toast('Your world is restored.');}
   function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);}
-  look=function(){legacyLook();get('modal').classList.remove('wide');const done=get('lookDone');done.onclick=()=>{game.state.profile.avatar=spriteIndex;game.save();close();toast('Look saved.');};};
+    function classicLook(){
+    legacyLook();get('modal').classList.remove('wide');
+    get('lookDone').onclick=()=>{if(game.state.profile.outfit)act('outfit',{outfit:null});game.state.profile.avatar=spriteIndex;game.save();sync();close();toast('Look saved.');};
+  }
+  // The wardrobe: start from one of the six classic looks, then change hair, top, bottoms, colours and skin.
+  look=function(){
+    const W=AfterhoursWardrobe,presets=['Daydream','Soul','Violet','Static','Peach','Echo'];
+    let draft=W.normalize(game.state.profile.outfit)||W.fromLegacy(spriteIndex),pose='front',preset=spriteIndex;
+    const choices=(field,options)=>'<div class="wardrobe-choices">'+options.map(([id,name])=>`<button type="button" data-field="${field}" data-value="${id}" aria-pressed="${draft[field]===id}">${h(name)}</button>`).join('')+'</div>';
+    const swatches=(field,options,label)=>`<div class="wardrobe-colours" role="group" aria-label="${label}">`+options.map(([id,name,hex])=>`<button type="button" data-field="${field}" data-value="${id}" style="--swatch:${hex}" aria-label="${h(name)}" title="${h(name)}" aria-pressed="${draft[field]===id}"></button>`).join('')+'</div>';
+    panel('Who’s showing up tonight?','THE WARDROBE',
+      `<div class="wardrobe-layout"><div class="wardrobe-preview"><canvas id="wardrobeCanvas" width="250" height="340" role="img" aria-label="Outfit preview"></canvas>`+
+      '<div class="wardrobe-poses">'+[['front','Front'],['back','Back'],['seated','Seated']].map(([id,name])=>`<button type="button" class="soft-button" data-pose="${id}" aria-pressed="${pose===id}">${name}</button>`).join('')+'</div><p>Everyone in the room sees this look.</p></div>'+
+      '<div class="wardrobe-options"><fieldset><legend>Start from a look</legend><div class="wardrobe-choices">'+presets.map((name,i)=>`<button type="button" data-preset="${i}">${name}</button>`).join('')+'</div></fieldset>'+
+      '<fieldset><legend>Hair</legend>'+choices('hair',W.hair)+swatches('hairColor',W.hairColors,'Hair colour')+'</fieldset>'+
+      '<fieldset><legend>Top</legend>'+choices('top',W.tops)+swatches('topColor',W.colors,'Top colour')+'</fieldset>'+
+      '<fieldset><legend>Bottoms</legend>'+choices('bottom',W.bottoms)+swatches('bottomColor',W.colors,'Bottoms colour')+'</fieldset>'+
+      '<fieldset><legend>Skin</legend>'+swatches('skin',W.skinColors,'Skin tone')+'</fieldset></div></div>'+
+      '<div class="wardrobe-footer"><button type="button" class="text-button" id="wardrobeClassic">Use a classic sprite</button><button type="button" class="primary" id="wardrobeSave">Save look</button></div>',true);
+    const body=get('modalBody'),render=()=>{
+      AfterhoursAvatar.preview(get('wardrobeCanvas'),draft,pose);
+      body.querySelectorAll('[data-field]').forEach(b=>b.setAttribute('aria-pressed',String(draft[b.dataset.field]===b.dataset.value)));
+      body.querySelectorAll('[data-pose]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.pose===pose)));
+    };
+    body.querySelector('.wardrobe-layout').onclick=e=>{
+      const b=e.target.closest('button');if(!b)return;
+      if(b.dataset.field)draft={...draft,[b.dataset.field]:b.dataset.value};
+      else if(b.dataset.pose)pose=b.dataset.pose;
+      else if(b.dataset.preset){preset=+b.dataset.preset;draft=W.fromLegacy(preset);}
+      render();
+    };
+    button('wardrobeSave',()=>{if(act('outfit',{outfit:draft},'Look saved.').ok){spriteIndex=preset;game.state.profile.avatar=preset;game.save();sync();close();}});
+    button('wardrobeClassic',classicLook);
+    AfterhoursAvatar.load().then(render);
+  };
   function directory(filter='all',query=''){
     const s=game.state,entries=rooms.map((r,i)=>({key:'public:'+i,name:r.title,description:r.mood,id:i,kind:'public',icon:r.icon})).concat(s.rooms.map(r=>({key:'my:'+r.id,name:r.name,description:r.description,id:r.id,kind:'mine',icon:'⌂'})));
     let list=entries.filter(e=>(filter==='all'||filter==='mine'&&e.kind==='mine'||filter==='favorites'&&s.favorites.includes(e.key)||filter==='recent'&&s.history.includes(e.key))&&(e.name+' '+e.description).toLowerCase().includes(query.toLowerCase()));

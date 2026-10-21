@@ -73,7 +73,7 @@
         const accounts=window.AfterhoursAccount;
         if(!accounts)throw Error('The host is still connecting account recovery. Please try again later.');
         await accounts.enter(captchaToken);
-        const out=await request('/api/guest',{name,avatar:W.getScene().spriteIndex});
+        const out=await request('/api/guest',{name,avatar:W.getScene().spriteIndex,outfit:W.game.state.profile.outfit});
         next=out.snapshot;account=out.account;
       }else{
         const out=await AfterhoursSession.resumeOrCreate(localStorage,async(path,body,saved)=>{
@@ -296,11 +296,11 @@
     if(pose.seat?.sitting){
       const crop=W.seatedCrops[index],height=118,width=crop[2]/crop[3]*height;
       W.ctx.translate(...pose.seat.point);if(pose.seat.flip)W.ctx.scale(-1,1);
-      W.ctx.drawImage(W.seatedImage,...crop,-width*.28,-height*.62,width,height);W.ctx.restore();
+      if(!(peer.outfit&&AfterhoursAvatar.draw(W.ctx,peer.outfit,{seated:true})))W.ctx.drawImage(W.seatedImage,...crop,-width*.28,-height*.62,width,height);W.ctx.restore();
       W.drawAvatarLabels({id:peer.id,name:peer.name,chatColor:peer.chatColor,bubble:pose.bubble?.text,bubbleMode:pose.bubble?.mode,until:pose.bubble?.until},pose.seat.point[0],pose.seat.point[1]+height*.38,false);return;
     }
     const step=pose.dancing&&!reducedMotion?AfterhoursView.dancePose(t):{bob:0,tilt:0};W.ctx.translate(x,y+step.bob*.8);if(step.tilt)W.ctx.rotate(step.tilt);
-    W.drawWalker(p,t,{...pose,moving:p.moving,phase:p.phase||0},index);
+    if(!(peer.outfit&&AfterhoursAvatar.draw(W.ctx,peer.outfit,{back:pose.back,flip:pose.flip,moving:p.moving,phase:p.phase||0,reducedMotion})))W.drawWalker(p,t,{...pose,moving:p.moving,phase:p.phase||0},index);
     W.ctx.restore();W.drawAvatarLabels({id:peer.id,name:peer.name,chatColor:peer.chatColor,bubble:pose.bubble?.text,bubbleMode:pose.bubble?.mode,until:pose.bubble?.until},x,y,false);
     W.ctx.fillStyle='#b5e8b2';W.ctx.beginPath();W.ctx.arc(x+22,y+26,3,0,Math.PI*2);W.ctx.fill();
   }

@@ -11,7 +11,7 @@ const spriteImage=new Image();spriteImage.src='assets/avatars.png';
 const roomView=AfterhoursView.mount(canvas);
 let zoom=roomView.camera.zoom,hover=null,last=performance.now();
 const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
-let spriteIndex=Number.isInteger(saved.avatar)?saved.avatar:0;$('.profile-art').style.backgroundPosition=(-spriteIndex*35)+'px -4px';
+let spriteIndex=Number.isInteger(saved.avatar)?saved.avatar:0,outfit=null;$('.profile-art').style.backgroundPosition=(-spriteIndex*35)+'px -4px';
 const personalImage=new Image();personalImage.src='assets/my-room.png';
 const furnitureImage=new Image();furnitureImage.src='assets/furniture.png';
 const backImage=new Image();backImage.src='assets/avatars-back.png';
@@ -134,7 +134,7 @@ function drawSeatedAvatar() {
   const crop=seatedCrops[spriteIndex],h=118,w=crop[2]/crop[3]*h,feet=hip+h*.38;
   ctx.save();ctx.translate(x,hip);if(offer.flip)ctx.scale(-1,1);
   ctx.imageSmoothingEnabled=true;
-  if(seatedImage.complete&&seatedImage.naturalWidth)ctx.drawImage(seatedImage,...crop,-w*.28,-h*.62,w,h);
+  if(outfit&&AfterhoursAvatar.draw(ctx,outfit,{seated:true})){}else if(seatedImage.complete&&seatedImage.naturalWidth)ctx.drawImage(seatedImage,...crop,-w*.28,-h*.62,w,h);
   ctx.restore();
   drawAvatarLabels(player,x,feet,true);
 }
@@ -226,7 +226,7 @@ function avatarDepth(actor,seat){
 }
 function drawAvatar(p,t,isPlayer){if(isPlayer&&seating.mode==='sitting'){drawSeatedAvatar();return}let[x,y]=iso(p.x,p.y);if(isPlayer&&rise&&!reducedMotion){const k=1-Math.pow(1-rise.progress,3);x=rise.from[0]+(x-rise.from[0])*k;y=rise.from[1]+54+(y-rise.from[1]-54)*k;}const pose=dancing&&isPlayer&&!reducedMotion?AfterhoursView.dancePose(t):{bob:0,tilt:0},bob=pose.bob;drawArrival(isPlayer?'self':p.id,x,y);ellipse(x,y+1,isPlayer&&walker.moving?27:29,10,'#05050a99');if(isPlayer){ctx.strokeStyle='#deee9380';ctx.lineWidth=1.3;ctx.beginPath();ctx.ellipse(x,y+2,33,12,0,0,Math.PI*2);ctx.stroke()}
  const idx=isPlayer?spriteIndex:people.indexOf(p)+1;ctx.save();ctx.translate(x,y+bob);if(pose.tilt)ctx.rotate(pose.tilt);
- if(isPlayer&&spriteImage.complete&&spriteImage.naturalWidth){drawWalker(p,t)}else if(spriteImage.complete&&spriteImage.naturalWidth){const sw=spriteImage.naturalWidth/6,sh=spriteImage.naturalHeight,h=118,w=sw/sh*h;if(isPlayer&&walker.flip)ctx.scale(-1,1);ctx.drawImage(spriteImage,idx*sw,0,sw,sh,-w/2,-h,w,h)}ctx.restore();
+ if(isPlayer&&outfit&&AfterhoursAvatar.draw(ctx,outfit,{back:walker.back,flip:walker.flip,moving:walker.moving,phase:walker.phase,reducedMotion})){}else if(isPlayer&&spriteImage.complete&&spriteImage.naturalWidth){drawWalker(p,t)}else if(spriteImage.complete&&spriteImage.naturalWidth){const sw=spriteImage.naturalWidth/6,sh=spriteImage.naturalHeight,h=118,w=sw/sh*h;if(isPlayer&&walker.flip)ctx.scale(-1,1);ctx.drawImage(spriteImage,idx*sw,0,sw,sh,-w/2,-h,w,h)}ctx.restore();
  drawAvatarLabels(p,x,y,isPlayer);
 }
 

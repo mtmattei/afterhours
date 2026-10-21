@@ -437,7 +437,7 @@
     heldKeys.clear();walker.goTo(targets[0].point);pendingUse={itemId:item.id,room:activeRoomId,action};toast('Walking to '+Furniture.catalog[item.type].name+'…');
   }
   function openObject(item){
-    if(!item)return;
+    if(!item)return;select('item',item.id);
     const c=Furniture.catalog[item.type],actions=[];
     if(c.seats?.length){useSeat(roomSeats().filter(s=>s.itemId===item.id));close();return;}
     const use=(label,fn)=>actions.push({label,fn});
@@ -535,7 +535,7 @@
     button('saveChatPreferences',()=>{game.state.settings.muteGuests=get('muteResidents').checked;game.save();close();});
     buttons('[data-unblock]',b=>{game.state.blocked=game.state.blocked.filter(n=>n!==b.dataset.unblock);game.save();close();});
   });
-  function residentProfile(person){
+  function residentProfile(person){select('resident',person.name);
     const friend=game.state.friends.includes(person.name),blocked=game.state.blocked.includes(person.name);
     panel(person.name,'RESIDENT CHARACTER',`<p>${h(residentReplies[person.name][0])}</p><p>This resident is part of the solo world.</p><div class="button-row"><button class="primary" id="residentFriend">${friend?'Remove from circle':'Add to my circle'}</button><button class="soft-button" id="residentWhisper">Whisper</button><button class="soft-button" id="residentBlock">${blocked?'Unblock':'Block replies'}</button></div>`);
     button('residentFriend',()=>{game.state.friends=friend?game.state.friends.filter(n=>n!==person.name):[...game.state.friends,person.name];game.save();residentProfile(person);});
@@ -608,7 +608,7 @@
     }
   };
   button('help',()=>panel('The night is yours','HOW TO PLAY',`<div class="help-grid"><article><b>01 · Make yourself at home</b><p>Click the floor to walk. Click seats to sit and other furniture to use it. Decorate moves and rotates your pieces.</p></article><article><b>02 · Find your sound</b><p>Make a track in Beat studio. Save it, perform on the stage, press a record, or export the audio.</p></article><article><b>03 · Earn your next thing</b><p>Check in daily, finish quests, play the arcade, and perform music. Collect your quest rewards in the Journal.</p></article><article><b>04 · Build your world</b><p>Create rooms, add usable objects, set up a playlist, leave notes, host events, and connect room logic.</p></article><article><b>05 · A little company</b><p>Adopt a cat, feed it, teach it tricks, and let it follow you. Click residents to open their profiles.</p></article><article><b>06 · Keep your progress</b><p>Your world saves automatically on this device. Export a backup from your profile. Shared sessions add real guests when the local game service is running.</p></article></div><p class="small-note">Camera: +/− zoom · Fit shows the whole room · ◎ follows you · Space + drag pans. Keyboard: arrows/WASD move · 1 wave · 2 dance · Esc stand · R rotate while decorating. Chat: :wave, :dance, :stand, :shout.</p>`,true));
-  sync();resetPet();populateChat();syncFavorite();updateHUD();game.save();
+  sync();resetPet();populateChat();syncFavorite();updateHUD();game.save();showRoomIntro();
   if(loadError)toast(loadError);
   // A narrow bridge for the optional multiplayer client, never for UI automation.
   window.AfterhoursWorld={

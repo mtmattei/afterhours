@@ -154,7 +154,7 @@
       get('tradeInvites').querySelectorAll('[data-open-trade]').forEach(b=>b.onclick=()=>tradePanel(state.trades.find(t=>t.id===b.dataset.openTrade)));
     }
   }
-  function playerPanel(id){
+  function playerPanel(id){select('peer',id);
     const p=state.peers.concat(state.friends).find(p=>p.id===id);if(!p)return;
     W.panel(p.name,'CONNECTED PLAYER',`<p>${h(p.motto)}</p><p>Level ${p.level} · ${p.online?'Here tonight':'Offline'}</p><div class="button-row"><button class="primary" id="requestFriend">Add friend</button><button class="soft-button" id="inviteTrade">Trade furniture</button><button class="soft-button" id="whisperPlayer">Whisper</button><button class="soft-button" id="blockPlayer">Block</button><button class="soft-button" id="reportPlayer">Report</button>${state.room.startsWith('home:'+state.self.id+':')?'<button class="soft-button" id="kickPlayer">Remove from room</button><button class="soft-button" id="banPlayer">Ban from room</button>':''}</div>`);
     W.button('requestFriend',()=>send('friend',{user:id}).then(()=>W.toast('Friend request sent.')));
@@ -294,6 +294,7 @@
     rollDice:id=>send('command',{type:'itemAction',payload:{id,action:'roll'}}).then(out=>out.result),
     chat:(text,mode,to)=>{if(online&&!(mode==='whisper'&&!state.peers.some(p=>p.id===to)))send('chat',{text,mode,to}).catch(()=>{});},
     saveLayout:()=>{if(online&&!applying&&!remote)send('layout',{room:W.getScene().activeRoomId,items:W.getScene().decor.map(i=>({id:i.id,x:i.x,y:i.y,rot:i.rot,placed:i.placed,state:i.state,destination:i.destination}))}).catch(()=>{});},
+    peerPoint(id){const peer=state?.peers.find(p=>p.id===id);if(!online||!peer)return null;if(peer.pose.seat?.sitting){const [x,y]=peer.pose.seat.point;return [x,y-95];}const p=rendered.get(id)||peer.pose,[x,y]=W.getScene().iso(p.x,p.y);return [x,y-150];},
     arcadeStart:(game,id)=>{if(online)send('arcadeStart',{game,id}).catch(()=>{});},
     update(dt,t){
       if(!online||Date.now()<retryAfter||document.hidden)return;

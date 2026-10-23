@@ -5,20 +5,20 @@ const player={x:5.5,y:5.5,tx:5.5,ty:5.5,name:'daydream',shirt};const people=[{x:
 if(!saved.editorVersion){decor.forEach(d=>d.placed=false);decor=[...AfterhoursFurniture.starter(),...decor]}
 function persist(){try{localStorage.setItem('afterhours',JSON.stringify({...JSON.parse(localStorage.getItem('afterhours')||'{}'),shirt:player.shirt,coins,decor,editorVersion:1}))}catch{}$('#coins').textContent=coins}
 persist();function toast(s){$('#toast').textContent=s;$('#toast').style.opacity=1;clearTimeout(toast.t);toast.t=setTimeout(()=>$('#toast').style.opacity=0,2800)}
-const sceneImage=new Image();sceneImage.src='assets/side-b.webp';
-const roomAtlas=new Image();roomAtlas.src='assets/room-atlas.webp';
-const spriteImage=new Image();spriteImage.src='assets/avatars.webp';
+const sceneImage=new Image();sceneImage.src=(window.AfterhoursBase||'')+'assets/side-b.webp';
+const roomAtlas=new Image();roomAtlas.src=(window.AfterhoursBase||'')+'assets/room-atlas.webp';
+const spriteImage=new Image();spriteImage.src=(window.AfterhoursBase||'')+'assets/avatars.webp';
 const roomView=AfterhoursView.mount(canvas);
 let zoom=roomView.camera.zoom,hover=null,last=performance.now();
 const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
 let spriteIndex=Number.isInteger(saved.avatar)?saved.avatar:0,outfit=null;$('.profile-art').style.backgroundPosition=(-spriteIndex*35)+'px -4px';
-const personalImage=new Image();personalImage.src='assets/my-room.webp';
-const furnitureImage=new Image();furnitureImage.src='assets/furniture.webp';
-const backImage=new Image();backImage.src='assets/avatars-back.webp';
-const seatedImage=new Image();seatedImage.src='assets/avatars-seated.webp';
+const personalImage=new Image();personalImage.src=(window.AfterhoursBase||'')+'assets/my-room.webp';
+const furnitureImage=new Image();furnitureImage.src=(window.AfterhoursBase||'')+'assets/furniture.webp';
+const backImage=new Image();backImage.src=(window.AfterhoursBase||'')+'assets/avatars-back.webp';
+const seatedImage=new Image();seatedImage.src=(window.AfterhoursBase||'')+'assets/avatars-seated.webp';
 const furnitureCrops=[[15, 45, 428, 379], [473, 80, 478, 376], [1005, 27, 276, 421], [1366, 16, 391, 409], [121, 428, 179, 425], [466, 527, 382, 297], [909, 470, 403, 388], [1371, 474, 373, 359]];
 const furnitureAtlases={classic:furnitureImage};
-for(const [name,file] of Object.entries({objects:'game-objects.webp',loft:'furniture-loft-v1.webp',culture:'furniture-culture-v1.webp',fantasyA:'furniture-fantasy-a-v1.webp',fantasyB:'furniture-fantasy-b-v1.webp',denA:'furniture-man-cave-a-v1.webp',denB:'furniture-man-cave-b-v1.webp'})){const art=new Image();art.src='assets/'+file;furnitureAtlases[name]=art;}
+for(const [name,file] of Object.entries({objects:'game-objects.webp',loft:'furniture-loft-v1.webp',culture:'furniture-culture-v1.webp',fantasyA:'furniture-fantasy-a-v1.webp',fantasyB:'furniture-fantasy-b-v1.webp',denA:'furniture-man-cave-a-v1.webp',denB:'furniture-man-cave-b-v1.webp'})){const art=new Image();art.src=(window.AfterhoursBase||'')+'assets/'+file;furnitureAtlases[name]=art;}
 const objectCrops=[[108,12,325,460],[514,17,317,463],[940,11,332,482],[1364,93,326,391],[80,446,363,415],[525,573,333,228],[926,490,338,356],[1374,519,332,335]];
 function furnitureArt(type){const c=AfterhoursFurniture.catalog[type];return{image:furnitureAtlases[c.atlas||(c.cell<8?'classic':'objects')],crop:c.crop||(c.cell<8?furnitureCrops[c.cell]:objectCrops[c.cell-8])};}
 function iso(x,y,z=0){if(personal)return[750+(x-y)*75,270+(x+y)*35-z];return roomIndex===0?[750+(x-y)*75,200+(x+y)*42-z]:[750+(x-y)*82,325+(x+y)*30-z]}

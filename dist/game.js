@@ -16,7 +16,7 @@
   let activeRoomId=game.state.activeRoom,screen='',pendingUse=null,carried=null,cleanupGame=null;
   let draft=copy(game.state.draft),music=new AfterhoursMusic(),studioHistory=[],stage=null,stageTimer=null,lastHud=0;
   let interactionBounds=[],petPosition=null,petWalker=null,lastPetPath=0,petPoseUntil=0,petPose='';
-  let newArt=new Image();newArt.src='assets/game-objects.webp';
+  let newArt=new Image();newArt.src=(window.AfterhoursBase||'')+'assets/game-objects.webp';
   // The atlas geometry is finalized by the asset packaging pass.
   const newCrops=[[108,12,325,460],[514,17,317,463],[940,11,332,482],[1364,93,326,391],[80,446,363,415],[525,573,333,228],[926,490,338,356],[1374,519,332,335]];
   const room=()=>window.AfterhoursOnline?.remoteRoom()||game.state.rooms.find(r=>r.id===activeRoomId)||game.state.rooms[0];

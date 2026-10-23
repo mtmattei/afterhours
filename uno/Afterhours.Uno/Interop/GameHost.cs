@@ -1,10 +1,9 @@
 using System.Runtime.InteropServices.JavaScript;
-using System.Runtime.Versioning;
 
 namespace Afterhours.Uno.Interop;
 
 // The only C# that calls the game's JavaScript. Functions live in game/host.mjs.
-[SupportedOSPlatform("browser")]
+[System.Runtime.Versioning.SupportedOSPlatform("browser")]
 internal static partial class GameHost
 {
     private const string Module = "afterhours";

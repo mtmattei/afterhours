@@ -1,12 +1,11 @@
 using System.Collections.Immutable;
-using System.Runtime.Versioning;
 using System.Text.Json;
 using Afterhours.Uno.Interop;
 
 namespace Afterhours.Uno.Services;
 
 // Phase A: both interfaces are backed by the JavaScript game running in the same page.
-[SupportedOSPlatform("browser")]
+[System.Runtime.Versioning.SupportedOSPlatform("browser")]
 public sealed class JsGame(GameEvents events) : IGameStore, IRoomView
 {
     private static readonly TimeSpan OpenTimeout = TimeSpan.FromSeconds(15);

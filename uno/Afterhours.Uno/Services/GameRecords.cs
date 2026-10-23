@@ -24,6 +24,7 @@ public sealed partial record Portrait(string Png);
 public sealed partial record RoomInfo(string Key, string Title, string Eyebrow, string Meta, int Guests, bool Saved, bool Personal, int Index)
 {
     public string SaveLabel => Saved ? "Saved" : "Save";
+    public string DisplayTitle => Title.ToUpperInvariant();
 }
 
 public sealed partial record EditorState(bool Active, string Title, string Hint, bool CanRotate, bool CanStore, bool CanUndo);

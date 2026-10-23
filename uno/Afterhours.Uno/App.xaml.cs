@@ -1,5 +1,6 @@
 using System;
 using Microsoft.Extensions.Logging;
+using Afterhours.Uno.Services;
 using Uno.Resizetizer;
 
 namespace Afterhours.Uno;
@@ -23,7 +24,18 @@ public partial class App : Application
     {
         var builder = this.CreateBuilder(args)
             .UseToolkitNavigation()
-            .Configure(host => host.UseNavigation(ReactiveViewModelMappings.ViewModelMappings, RegisterRoutes));
+            .Configure(host => host
+                .ConfigureServices(services =>
+                {
+                    // The game runs as JavaScript in the browser page (the app's only target).
+                    if (OperatingSystem.IsBrowser())
+                    {
+                        var game = new JsGame(new GameEvents());
+                        services.AddSingleton<IGameStore>(game);
+                        services.AddSingleton<IRoomView>(game);
+                    }
+                })
+                .UseNavigation(ReactiveViewModelMappings.ViewModelMappings, RegisterRoutes));
         MainWindow = builder.Window;
 #if DEBUG
         MainWindow.UseStudio();
@@ -36,13 +48,11 @@ public partial class App : Application
     {
         views.Register(
             new ViewMap(ViewModel: typeof(ShellModel)),
-            new ViewMap<MainPage, MainModel>(),
-            new ViewMap<SpikePanelPage, SpikePanelModel>());
+            new ViewMap<MainPage, MainModel>());
         routes.Register(
             new RouteMap("", View: views.FindByViewModel<ShellModel>(), Nested:
             [
                 new("Main", View: views.FindByViewModel<MainModel>(), IsDefault: true),
-                new("SpikePanel", View: views.FindByViewModel<SpikePanelModel>()),
             ]));
     }
 

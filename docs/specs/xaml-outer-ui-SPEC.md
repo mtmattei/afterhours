@@ -1,6 +1,6 @@
 # Spec: Afterhours UI in Uno XAML around a JavaScript room
 
-Status: **draft v2; waves 0 and 1 done, wave 2 next.** Rewritten 2026-10-23 after the migration-scope review.
+Status: **draft v2; waves 0–2 done, wave 3 next.** Rewritten 2026-10-23 after the migration-scope review.
 No app code changed yet.
 
 ## Settled inputs
@@ -138,16 +138,15 @@ routes.Register(new RouteMap("", View: views.FindByViewModel<ShellModel>(), Nest
 
 ### Panel inventory (Phase A)
 
-Each row is a `!` route opened over `MainPage`, shown as a right flyout (F) or a dialog (D). The source column
+Each row is a `!` route opened over `MainPage`, shown as a right flyout (F) or a dialog (D). Since wave 2 every
+`!` route opens in the same right drawer (`Views/PanelFlyout.xaml`); D rows are drawers too. The source column
 names the JS function it replaces; that JS is deleted when the row ships.
 
 | Wave | Route | Kind | Model data | Replaces |
 |---|---|---|---|---|
-| 2 | `Shop` | F | — | `catalog` "THE FURNITURE SHOP" |
-| 2 | `Inventory` | F | — | `showInventory` |
-| 2 | `CollectionItem` | D | `CatalogEntry` | `catalog` item "THE AFTERHOURS COLLECTION" |
-| 2 | `Blueprints` | F | — | `blueprints` |
-| 2 | `WrapGift` | D | `ItemId` | gift panel "WRAP A GIFT" |
+| 2 ✓ | `Catalog` | F | `CatalogRequest(Tab)` | `catalog` "THE FURNITURE SHOP", `showInventory`, item detail "THE AFTERHOURS COLLECTION" |
+| 2 ✓ | `Blueprints` | F | — | `blueprints` |
+| 2 ✓ | `WrapGift` | D | `WrapGiftRequest(ItemId)` | gift panel "WRAP A GIFT" |
 | 3 | `Studio` | F | — | `studio` (Editor / Library tabs) |
 | 3 | `DeleteSong` | D | `SongId` | "Delete this track?" |
 | 3 | `Stage` | F | — | `stagePanel` (solo) and shared stage "SHARED MUSIC STAGE" |
@@ -309,8 +308,8 @@ chat column) and the four interfaces.
 
 1. **Boot:** BootPanel → `GameHost.Load` → `IRoomView.Mount(RoomHost.Id)` → `Ready` → BootPanel hides.
    Over 15 s or on a script error → Error state with Retry, which reloads the page.
-2. **Shop:** TopBar "Furniture shop" → `!Shop` → item → `!CollectionItem` → Buy → `Dispatch(Buy)` → close both →
-   `IRoomView.Select(itemId)` places it (editor bar appears).
+2. **Shop:** TopBar "Furniture shop" → `!Catalog` (shop tab) → card → inline detail → Buy → `IGameStore.Buy` →
+   `IGameStore.Place(id)` → drawer closes, the game selects the piece (editor bar appears).
 3. **Studio:** Rail "Beat studio" → `!Studio` (Editor) → steps, tempo, pack → Play (playhead) → Save → Library →
    Perform → `-` → `!Stage`.
 4. **Look:** Rail "My look" → `!Wardrobe` → parts, colours, pose → Save → `Dispatch(Outfit)` → `-`.
@@ -371,7 +370,7 @@ doorbell. Screenshots per route in `docs/screenshots/xaml/`.
 ```
 Shell (no Region.Attached)
 └─ Main   ViewMap<MainPage, MainModel>  IsDefault        ← all routes below open with "!" from Main
-   ├─ wave 2  Shop F · Inventory F · CollectionItem D(CatalogEntry) · Blueprints F · WrapGift D(ItemId)
+   ├─ wave 2  Catalog F(CatalogRequest) · Blueprints F · WrapGift D(WrapGiftRequest)   ✓ shipped
    ├─ wave 3  Studio F ─ DeleteSong D(SongId) · Stage F · SetComplete D(SetResult) · Jukebox F(RoomId) · Chart F
    ├─ wave 4  Wardrobe F · Profile F ─ RestoreSave D(GameState) · Journal F · Help F
    ├─ wave 5  Rooms F(RoomFilter) ─ CreateRoom D · RoomTools F(RoomId) ─ RoomLogic F · RoomEvent D · Portal D(ItemId)
@@ -496,7 +495,7 @@ trimmed Release publish.
 
 ## Wave 1 results (2026-10-23)
 
-**Done: XAML chrome around the JavaScript room.** 30/30 runtime checks (`scripts/verify-wave1.mjs`,
+**Done: XAML chrome around the JavaScript room.** 30/30 runtime checks (`scripts/verify-wave1.mjs`, now `scripts/verify-xaml.mjs`;
 screenshots in `docs/screenshots/xaml/wave1/`) at 1440/1000/800/390 px, solo and two-player shared;
 72 Node tests and 9 xUnit tests pass; the publish passes the warning gate.
 
@@ -523,6 +522,40 @@ Decisions made while building (they amend the briefs above):
   from Uno assemblies (52 + 3 today; the count grows with each model). Any other warning fails `npm run build:uno`.
 - **Chat command shape.** `Send(text, mode, whisperTarget)`: `text` is the command parameter (Enter passes
   `TextBox.Text`; the button passes it by `ElementName`), the other two resolve from MVUX states.
+
+## Wave 2 results (2026-10-23)
+
+**Done: shop, inventory, records, blueprints and gift wrap in XAML.** 40/40 runtime checks
+(`scripts/verify-xaml.mjs`, screenshots in `docs/screenshots/xaml/wave2/`) at 1440/1000/800/390 px, solo and
+two-player shared; 73 Node tests and 16 xUnit tests pass; the publish passes the warning gate.
+
+What shipped: `!Catalog` with shop / inventory / records tabs, collections list (Normal and up), search,
+category filter, balance line, a virtualized card grid with atlas art, and an inline detail with buy, place,
+interact and play; `!Blueprints` (save, restore); `!WrapGift` (choose a piece, note, wrap). The game builds
+none of these any more: `catalog()`, `blueprints()` and the gift action call `openPanel(route, data)`, which
+reaches `MainModel` as an `open` event and becomes navigation.
+
+Decisions made while building (they amend the briefs above):
+
+- **Catalog absorbs Inventory and CollectionItem.** The game already showed them as tabs and an inline detail of
+  one panel, so the routes are `Catalog(Tab)`, `Blueprints` and `WrapGift(ItemId)`.
+- **Writes are named host functions.** `host.mjs` exports `buy`, `place`, `use`, `wrap`, `saveBlueprint`,
+  `restoreBlueprint` and `playDisc`; each calls the game's own action and replies `{ok, error, result}`.
+  Rule failures surface verbatim in an `InfoBar` (for example "You do not have enough credits.").
+- **Read side:** `shop` is sent once with entries, collections, categories and atlas crops; the inventory is a
+  projection of six save slices. `ShopRules` (filters, card text, gift options) is plain C# with xUnit tests
+  against the shared fixture.
+- **Panels open in a right drawer.** `PanelFlyout` (Toolkit `RightDrawerFlyoutPresenterStyle`,
+  `DrawerLength=Auto`) replaces the centred `NavigationFlyout` through DI; each page sets its width
+  (`{utu:Responsive}`). The Fluent flyout size caps are left at their defaults.
+- **Grid:** `ItemsRepeater` + `UniformGridLayout` (`ItemsStretch=Fill`). `GridView` realized every card: 4.8 s
+  to first cards against 2.4 s. First open: title 0.9 s, cards 2.4 s (atlas decode); reopen is instant.
+- **Atlas art:** a `Canvas` with the atlas `Image` offset by the crop and clipped to it. MVUX wraps a record read
+  through a state in a generated bindable proxy, so the clip binds to `ArtFrame.ClipRect`, a value type.
+- **JS dialog first.** `openPanel` closes the game's `<dialog>` before asking for a XAML panel, because the
+  browser top layer would cover the drawer (R2).
+- **`Uno0001` is an error.** `ItemsStackPanel.ItemsUpdatingScrollMode` is not implemented on WASM and slipped
+  past the gate's regex; the regex is fixed, `Uno0001` is in `WarningsAsErrors`, and chat scrolls in code-behind.
 
 ## Implementation Plan
 
@@ -573,12 +606,19 @@ Each wave is one or more conventional commits on its own branch, merged only wit
 - **R9 Accounts:** the Turnstile widget inside a XAML dialog's `BrowserHtmlElement`, and Supabase
   session/redirect flows driven from C#. Wave 7 is gated on a 15-min spike; if it fails, the account panels
   stay JS dialogs.
-- **R11 Screen readers on WASM native:** `AutomationProperties.Name` produced no `aria-label` in the Release
-  build (Uno 6.7.135), and Tab revealed no "Enable accessibility" element (the docs describe that flow for the
-  Skia renderer). Spike 15 min in wave 2; the names are already set in XAML so the fix is configuration.
+- **R11 Screen readers on WASM native: open, needs a decision.** Wave 2 spike: `AutomationProperties.Name`
+  produces no `aria-label` in the native (DOM) renderer of Uno 6.7.135, and setting
+  `AutomationConfiguration.IsAccessibilityEnabled` changes nothing (0 aria labels outside the room, logged by
+  `verify-xaml.mjs`). The documented screen-reader support (semantic DOM overlay, "Enable accessibility") is
+  for the Skia renderer, so this is a renderer choice, not configuration. The names stay set in XAML so a
+  renderer switch picks them up. See Unresolved Questions.
 - **R10 File import:** `FileOpenPicker` on WASM for save restore. Fallback: a JS file input in a small island.
 
 ## Unresolved Questions
+
+- **R11 renderer:** move the WASM head to the Skia renderer for screen-reader support (architecture change;
+  re-run waves 0–2 checks, especially `BrowserHtmlElement` hosting and overlay blending), or ship Phase A on
+  the native renderer without screen-reader labels and decide before wave 8?
 
 - ~~Server path, new dependencies, trim warnings, standalone build~~ **Approved 2026-10-23:** staged server
   order; `Hosting; MVUX; Navigation; Toolkit` + four OFL fonts + xUnit project; gate on no warnings beyond

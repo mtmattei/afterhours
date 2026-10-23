@@ -516,7 +516,7 @@ Each wave is one or more conventional commits on its own branch, merged only wit
 
 | Phase | Gate (skill) | Done when |
 |---|---|---|
-| every wave | Build + tests | `npm test` green; `npm run build:uno` with no warnings beyond the 20 recorded Extensions/MVUX trim warnings (pending decision); xUnit green; CI green |
+| every wave | Build + tests | `npm test` green; `npm run build:uno` with no warnings beyond the 20 recorded Extensions/MVUX trim warnings; xUnit green; CI green |
 | waves 1–7 | `uno-verify` (Playwright on WASM; App MCP n/a for this head) | every touched route exercised at 4 widths, solo and shared |
 | waves 2–7 | `uno-component-states` | Progress/None/Error per the table; Retry proven by failing the store |
 | waves 1–7 | `uno-build-log` | entry per wave in `docs/fleet/BUILD-LOG.md` |
@@ -546,19 +546,10 @@ Each wave is one or more conventional commits on its own branch, merged only wit
 
 ## Unresolved Questions
 
-- **Server path:** the staged order is assumed: Phase A over JS state, Phase B with C# rules and shared test
-  cases, ASP.NET Core only past the five-player cap. Confirm?
-- **New dependencies:** the `Hosting; MVUX; Navigation; Toolkit` UnoFeatures (+0.96 MB brotli, measured in
-  wave 0), four OFL font files, and an xUnit test project. Approve?
-- **Trim warnings:** those features add 17 × IL2026 + 3 × IL2104 from Uno.Extensions/MVUX code the app doesn't
-  own. Options: (a) gate on "no warnings beyond this recorded set" (recommended); (b) suppress IL2026/IL2104
-  project-wide, which would also hide future warnings in our own code; (c) drop MVUX/Navigation for MVVM.
-- **Standalone build:** once a panel moves to XAML, its JS template code is deleted. `Afterhours.html` and
-  `npm start` (the solo HTML game) then lose that panel. Options:
-  (a) keep a frozen JS UI copy for the standalone download;
-  (b) retire the standalone HTML and make the published Uno app the only client;
-  (c) keep the JS panels and maintain both.
-  Recommendation: (b). Solo play survives inside the Uno app.
+- ~~Server path, new dependencies, trim warnings, standalone build~~ **Approved 2026-10-23:** staged server
+  order; `Hosting; MVUX; Navigation; Toolkit` + four OFL fonts + xUnit project; gate on no warnings beyond
+  the 20 recorded Extensions/MVUX trim warnings; retire the standalone `Afterhours.html` (the Uno app becomes
+  the only client, solo play stays inside it). The packager and README mentions go in wave 8.
 - **Substituted:** wardrobe preview tinting, synth/playhead/WAV export and arcade rounds stay JS behind
   interfaces. OK?
 - **Omitted:** speech bubbles, arrival cues and the room intro card stay drawn on the canvas. OK?

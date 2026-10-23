@@ -1,0 +1,50 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {createRequire} from 'node:module';
+import {commands, diffSlices, hudFrom} from '../dist/host.js';
+
+const require = createRequire(import.meta.url);
+const G = require('../dist/game-core.js'), F = require('../dist/furniture.js');
+const fresh = () => new G.Game(null, {coins: 240, decor: F.starter()});
+
+test('state slices are sent whole once, then only when their JSON changes', () => {
+  const sent = {}, g = fresh();
+  const first = diffSlices(g.state, sent);
+  assert.deepEqual(Object.keys(first).sort(), Object.keys(g.state).sort());
+  assert.equal(diffSlices(g.state, sent), null);
+  g.dispatch('checkin', {}, Date.UTC(2026, 9, 20));
+  const next = diffSlices(g.state, sent);
+  assert.ok(next.coins === 275 && !('items' in next) && !('songs' in next));
+});
+
+test('the HUD uses the game rules for level, XP band, quests and the daily gift', () => {
+  const g = fresh(), now = Date.now();
+  let hud = hudFrom(g.state, G);
+  assert.equal(hud.coins, 240);
+  assert.equal(hud.level, G.level(g.state));
+  assert.equal(hud.xpLower, (hud.level - 1) ** 2 * 100);
+  assert.equal(hud.xpUpper, hud.level ** 2 * 100);
+  assert.equal(hud.nextQuest, G.quests.find(q => !g.state.claimed.includes(q.id)).name);
+  assert.equal(hud.dailyClaimed, false);
+  g.dispatch('checkin', {}, now);
+  hud = hudFrom(g.state, G);
+  assert.equal(hud.coins, 275);
+  assert.equal(hud.dailyClaimed, true);
+});
+
+test('every XAML command maps to an element the game creates', async () => {
+  const sources = (await Promise.all(['index.html', 'app.js', 'game.js', 'online.js'].map(f => readFile(new URL('../dist/' + f, import.meta.url), 'utf8')))).join('\n');
+  for (const [name, selector] of Object.entries(commands)) {
+    const id = selector.match(/^#([\w-]+)$/)?.[1], view = selector.match(/data-view="(\w+)"/)?.[1];
+    const found = id ? new RegExp(`id=["']${id}["']|\\.id=['"]${id}['"]`).test(sources) : sources.includes(`data-view="${view}"`);
+    assert.ok(found, `${name} -> ${selector} is not created by the game`);
+  }
+});
+
+test('hosted mode hides every piece of chrome the XAML replaces', async () => {
+  const css = await readFile(new URL('../dist/hosted.css', import.meta.url), 'utf8');
+  const hidden = css.match(/([^{}]*)\{display:none!important\}/)[1];
+  for (const part of ['.topbar', '.rail', '.room-heading', '.room-journey', '.action-bar', '.room-composer', '.now-playing', '.social', 'footer', '#roomEditor'])
+    assert.ok(hidden.includes('.ah-root.ah-hosted ' + part), part + ' is not hidden');
+});

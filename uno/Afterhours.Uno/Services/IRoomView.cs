@@ -13,6 +13,9 @@ public interface IRoomView
 
     IAsyncEnumerable<ChatState> WatchChat(CancellationToken ct);
 
+    // Panels the game asks the app to open (for example the shop from a records cabinet).
+    IAsyncEnumerable<OpenRequest> WatchOpenRequests(CancellationToken ct);
+
     Task MountAsync(string elementId);
 
     // Runs one of the commands in host.mjs's allowlist. Returns false when the game has it disabled.

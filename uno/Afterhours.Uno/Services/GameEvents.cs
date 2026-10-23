@@ -14,6 +14,12 @@ public sealed class GameEvents
     public Latest<Portrait> Portrait { get; } = new();
     public Latest<Chrome> Chrome { get; } = new();
     public Latest<ChatState> Chat { get; } = new();
+    public Latest<ShopData> Shop { get; } = new();
+    public Latest<Inventory> Inventory { get; } = new();
+    public EventStream<OpenRequest> OpenRequests { get; } = new();
+
+    // Save keys the Inventory projection is built from.
+    private static readonly string[] InventoryKeys = ["coins", "activeRoom", "items", "rooms", "discs", "blueprints"];
 
     public bool TryGetSlice(string key, out JsonElement value) => _slices.TryGetValue(key, out value);
 
@@ -29,8 +35,23 @@ public sealed class GameEvents
                 Status.Set(new BridgeStatus(true));
                 break;
             case "slices":
+                var changed = false;
                 foreach (var slice in root.GetProperty("slices").EnumerateObject())
+                {
                     _slices[slice.Name] = slice.Value.Clone();
+                    changed |= InventoryKeys.Contains(slice.Name);
+                }
+                if (changed && InventoryKeys.All(_slices.ContainsKey))
+                    Inventory.Set(new Inventory(
+                        _slices["coins"].GetInt32(), _slices["activeRoom"].GetString() ?? "",
+                        _slices["items"].Deserialize(ctx.ImmutableListOwnedItem)!, _slices["rooms"].Deserialize(ctx.ImmutableListRoomRef)!,
+                        _slices["discs"].Deserialize(ctx.ImmutableListDisc)!, _slices["blueprints"].Deserialize(ctx.ImmutableListBlueprint)!));
+                break;
+            case "shop":
+                Shop.Set(root.GetProperty("shop").Deserialize(ctx.ShopData)!);
+                break;
+            case "open":
+                OpenRequests.Publish(root.Deserialize(ctx.OpenRequest)!);
                 break;
             case "hud":
                 Hud.Set(root.GetProperty("hud").Deserialize(ctx.Hud)!);

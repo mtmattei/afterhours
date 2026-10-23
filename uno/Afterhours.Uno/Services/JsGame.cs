@@ -25,6 +25,30 @@ public sealed class JsGame(GameEvents events) : IGameStore, IRoomView
 
     public IAsyncEnumerable<ChatState> WatchChat(CancellationToken ct) => events.Chat.Watch(ct);
 
+    public IAsyncEnumerable<OpenRequest> WatchOpenRequests(CancellationToken ct) => events.OpenRequests.Watch(ct);
+
+    public IAsyncEnumerable<ShopData> WatchShop(CancellationToken ct) => events.Shop.Watch(ct);
+
+    public IAsyncEnumerable<Inventory> WatchInventory(CancellationToken ct) => events.Inventory.Watch(ct);
+
+    public ActionReply Buy(string type) => Reply(() => GameHost.Buy(type));
+
+    public async Task<ActionReply> Place(string itemId) => _mounted ? Parse(await GameHost.Place(itemId)) : ActionReply.NotReady;
+
+    public ActionReply Use(string itemId) => Reply(() => GameHost.Use(itemId));
+
+    public ActionReply Wrap(string giftId, string contentId, string note) => Reply(() => GameHost.Wrap(giftId, contentId, note));
+
+    public ActionReply SaveBlueprint() => Reply(GameHost.SaveBlueprint);
+
+    public ActionReply RestoreBlueprint(string blueprintId) => Reply(() => GameHost.RestoreBlueprint(blueprintId));
+
+    public ActionReply PlayDisc(string discId) => Reply(() => GameHost.PlayDisc(discId));
+
+    private ActionReply Reply(Func<string> call) => _mounted ? Parse(call()) : ActionReply.NotReady;
+
+    private static ActionReply Parse(string json) => JsonSerializer.Deserialize(json, BridgeJsonContext.Default.ActionReply)!;
+
     public async Task MountAsync(string elementId)
     {
         if (_mounted)

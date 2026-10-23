@@ -24,4 +24,26 @@ internal static partial class GameHost
 
     [JSImport("focusRoom", Module)]
     public static partial void FocusRoom();
+
+    // Writes reply with {ok, error, result} as JSON.
+    [JSImport("buy", Module)]
+    public static partial string Buy(string type);
+
+    [JSImport("place", Module)]
+    public static partial Task<string> Place(string itemId);
+
+    [JSImport("use", Module)]
+    public static partial string Use(string itemId);
+
+    [JSImport("wrap", Module)]
+    public static partial string Wrap(string giftId, string contentId, string note);
+
+    [JSImport("saveBlueprint", Module)]
+    public static partial string SaveBlueprint();
+
+    [JSImport("restoreBlueprint", Module)]
+    public static partial string RestoreBlueprint(string blueprintId);
+
+    [JSImport("playDisc", Module)]
+    public static partial string PlayDisc(string discId);
 }

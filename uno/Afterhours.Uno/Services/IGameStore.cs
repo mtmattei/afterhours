@@ -10,4 +10,23 @@ public interface IGameStore
     IAsyncEnumerable<Portrait> WatchPortrait(CancellationToken ct);
 
     bool TryGetSlice(string key, out JsonElement value);
+
+    IAsyncEnumerable<ShopData> WatchShop(CancellationToken ct);
+
+    IAsyncEnumerable<Inventory> WatchInventory(CancellationToken ct);
+
+    // Writes. Each runs the game's own action; a failed reply carries the game's message.
+    ActionReply Buy(string type);
+
+    Task<ActionReply> Place(string itemId);
+
+    ActionReply Use(string itemId);
+
+    ActionReply Wrap(string giftId, string contentId, string note);
+
+    ActionReply SaveBlueprint();
+
+    ActionReply RestoreBlueprint(string blueprintId);
+
+    ActionReply PlayDisc(string discId);
 }

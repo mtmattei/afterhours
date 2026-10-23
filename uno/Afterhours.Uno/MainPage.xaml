@@ -45,7 +45,7 @@
             <TextBlock Text="{Binding Chrome.Connection.Label}" Style="{StaticResource EyebrowText}" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
-        <Button Content="Furniture shop" Style="{StaticResource SoftButtonStyle}" Command="{Binding Run}" CommandParameter="shop"
+        <Button Content="Furniture shop" Style="{StaticResource SoftButtonStyle}" Command="{Binding OpenShop}"
                 Visibility="{utu:Responsive Narrowest=Collapsed, Narrow=Visible}" />
         <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" AutomationProperties.Name="Credits">
           <TextBlock Text="✦" Style="{StaticResource NumeralText}" Foreground="{StaticResource AcidBrush}" />
@@ -241,7 +241,7 @@
                         IsEnabled="{Binding Chrome.Editor.CanStore}" />
                 <Button Content="Undo" Style="{StaticResource SoftButtonStyle}" Command="{Binding Run}" CommandParameter="undo"
                         IsEnabled="{Binding Chrome.Editor.CanUndo}" />
-                <Button Content="＋ Furniture" Style="{StaticResource SoftButtonStyle}" Command="{Binding Run}" CommandParameter="inventory" />
+                <Button Content="＋ Furniture" Style="{StaticResource SoftButtonStyle}" Command="{Binding OpenInventory}" />
                 <Button Content="Done" Style="{StaticResource PrimaryButtonStyle}" Command="{Binding Run}" CommandParameter="finish" />
               </StackPanel>
             </Grid>
@@ -257,7 +257,7 @@
             <Button Content="Decorate" Style="{StaticResource SoftButtonStyle}" Command="{Binding Run}" CommandParameter="decorate" />
             <Rectangle Width="1" Margin="6,8" Fill="{StaticResource LineBrush}" />
             <Button Content="Stage" Style="{StaticResource SoftButtonStyle}" Command="{Binding Run}" CommandParameter="stage" />
-            <Button Content="Catalog" Style="{StaticResource SoftButtonStyle}" Command="{Binding Run}" CommandParameter="catalog" />
+            <Button Content="Catalog" Style="{StaticResource SoftButtonStyle}" Command="{Binding OpenShop}" />
             <Button Content="My rooms" Style="{StaticResource SoftButtonStyle}" Command="{Binding Run}" CommandParameter="myRooms" />
             <Button Content="Companion" Style="{StaticResource SoftButtonStyle}" Command="{Binding Run}" CommandParameter="companion" />
             <Button Content="Room tools" Style="{StaticResource SoftButtonStyle}" Command="{Binding Run}" CommandParameter="roomTools" />
@@ -341,7 +341,7 @@
               <Button Content="My look" Style="{StaticResource QuietButtonStyle}" Command="{Binding Run}" CommandParameter="look" />
               <Button Content="Journal" Style="{StaticResource QuietButtonStyle}" Command="{Binding Run}" CommandParameter="journal" />
               <Button Content="Arcade" Style="{StaticResource QuietButtonStyle}" Command="{Binding Run}" CommandParameter="arcade" />
-              <Button Content="Furniture shop" Style="{StaticResource QuietButtonStyle}" Command="{Binding Run}" CommandParameter="shop" />
+              <Button Content="Furniture shop" Style="{StaticResource QuietButtonStyle}" Command="{Binding OpenShop}" />
               <Button Content="{Binding Hud.DailyLabel}" Style="{StaticResource QuietButtonStyle}" Command="{Binding Run}" CommandParameter="daily" />
               <Button Content="{Binding Chrome.Connection.Label}" Style="{StaticResource QuietButtonStyle}" Command="{Binding Run}" CommandParameter="shared" />
               <Button Content="How to play" Style="{StaticResource QuietButtonStyle}" Command="{Binding Run}" CommandParameter="help" />

@@ -55,8 +55,46 @@ public class GameEventsTests
     {
         var events = Loaded();
         Assert.True(events.TryGetSlice("coins", out var coins));
-        Assert.Equal(240, coins.GetInt32());
-        Assert.False(events.TryGetSlice("items", out _));
+        Assert.Equal(160, coins.GetInt32()); // the later slice (after a purchase) replaces the first
+        Assert.True(events.TryGetSlice("profile", out _));
+        Assert.False(events.TryGetSlice("friends", out _));
+    }
+
+    [Fact]
+    public void Inventory_is_built_once_every_save_slice_it_needs_has_arrived()
+    {
+        var inventory = Loaded().Inventory.Value!;
+        Assert.Equal("home", inventory.ActiveRoom);
+        Assert.Equal("Your afterhours", inventory.Rooms[0].Name);
+        var bought = Assert.Single(inventory.Items, i => i.InInventory);
+        Assert.Equal("bought-sofa", bought.Id);
+        Assert.Equal("Side B", inventory.Discs[0].Song.Title);
+        Assert.Equal("bp-1", inventory.Blueprints[0].Id);
+    }
+
+    [Fact]
+    public void Shop_parses_entries_with_their_atlas_crop()
+    {
+        var shop = Loaded().Shop.Value!;
+        Assert.Equal("Soft loft", shop.Collections[0].Name);
+        Assert.Equal([200, 0, 100, 150], shop.Entries[1].Crop.ToArray());
+        Assert.Equal(1024, shop.Entries[0].Atlas.Width);
+    }
+
+    [Fact]
+    public async Task Open_requests_reach_watchers_and_are_not_replayed()
+    {
+        var events = new GameEvents();
+        events.Receive("""{"type":"open","route":"Catalog","data":{"tab":"owned"}}""");
+        using var cts = new CancellationTokenSource();
+        var watcher = events.OpenRequests.Watch(cts.Token).GetAsyncEnumerator();
+        var next = watcher.MoveNextAsync();
+        events.Receive("""{"type":"open","route":"WrapGift","data":{"itemId":"bought-sofa"}}""");
+        Assert.True(await next);
+        Assert.Equal("WrapGift", watcher.Current.Route);
+        Assert.Equal("bought-sofa", watcher.Current.Text("itemId"));
+        Assert.Null(watcher.Current.Text("tab"));
+        await cts.CancelAsync();
     }
 
     [Fact]

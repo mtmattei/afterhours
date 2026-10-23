@@ -8,8 +8,11 @@ public sealed partial record RoomStop(PublicRoom Room, bool Current);
 
 public sealed partial record ChatMode(string Id, string Name);
 
-public partial record MainModel(IGameStore Store, IRoomView RoomView)
+public partial record MainModel(IGameStore Store, IRoomView RoomView, INavigator Navigator)
 {
+    // Opens the XAML panels the game asks for (for example the shop from a records cabinet).
+    private readonly Task _panels = OpenRequestedPanels(RoomView, Navigator);
+
     public ImmutableList<ChatMode> ChatModes { get; } = [new("say", "Say"), new("shout", "Shout"), new("whisper", "Whisper")];
 
     public IFeed<BridgeStatus> Status => Feed.AsyncEnumerable(RoomView.WatchStatus);
@@ -48,6 +51,28 @@ public partial record MainModel(IGameStore Store, IRoomView RoomView)
     }
 
     public void Retry() => RoomView.Reload();
+
+    public async ValueTask OpenShop(CancellationToken ct) => await OpenCatalog(Navigator, "shop", ct);
+
+    public async ValueTask OpenInventory(CancellationToken ct) => await OpenCatalog(Navigator, "owned", ct);
+
+    private static Task OpenCatalog(INavigator navigator, string tab, CancellationToken ct) =>
+        navigator.NavigateRouteAsync(navigator, "Catalog", qualifier: Qualifiers.Dialog, data: new CatalogRequest(tab), cancellation: ct);
+
+    private static async Task OpenRequestedPanels(IRoomView room, INavigator navigator)
+    {
+        await foreach (var request in room.WatchOpenRequests(CancellationToken.None))
+        {
+            _ = request.Route switch
+            {
+                "Catalog" => OpenCatalog(navigator, request.Text("tab") ?? "shop", CancellationToken.None),
+                "Blueprints" => navigator.NavigateRouteAsync(navigator, "Blueprints", qualifier: Qualifiers.Dialog),
+                "WrapGift" when request.Text("itemId") is { } item =>
+                    navigator.NavigateRouteAsync(navigator, "WrapGift", qualifier: Qualifiers.Dialog, data: new WrapGiftRequest(item)),
+                _ => Task.CompletedTask,
+            };
+        }
+    }
 
     public Task Mount(string elementId) => RoomView.MountAsync(elementId);
 

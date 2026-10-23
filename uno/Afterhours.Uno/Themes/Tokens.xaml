@@ -27,6 +27,8 @@
   <SolidColorBrush x:Key="MutedBrush" Color="{StaticResource MutedColor}" />
   <SolidColorBrush x:Key="AcidBrush" Color="{StaticResource AcidColor}" />
   <SolidColorBrush x:Key="OnAcidBrush" Color="{StaticResource OnAcidColor}" />
+  <!-- Dims the room behind an open panel drawer. -->
+  <SolidColorBrush x:Key="DrawerScrimBrush" Color="#99000000" />
 
   <FontFamily x:Key="BodyFontFamily">ms-appx:///Assets/Fonts/DMSans_Regular.ttf#DM Sans</FontFamily>
   <FontFamily x:Key="BodyStrongFontFamily">ms-appx:///Assets/Fonts/DMSans_Bold.ttf#DM Sans</FontFamily>

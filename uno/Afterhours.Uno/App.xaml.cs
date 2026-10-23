@@ -1,6 +1,7 @@
 using System;
 using Microsoft.Extensions.Logging;
 using Afterhours.Uno.Services;
+using Afterhours.Uno.Views;
 using Uno.Resizetizer;
 
 namespace Afterhours.Uno;
@@ -35,7 +36,9 @@ public partial class App : Application
                         services.AddSingleton<IRoomView>(game);
                     }
                 })
-                .UseNavigation(ReactiveViewModelMappings.ViewModelMappings, RegisterRoutes));
+                .UseNavigation(ReactiveViewModelMappings.ViewModelMappings, RegisterRoutes)
+                // Panels open as a right drawer; replaces the centred NavigationFlyout UseNavigation registers.
+                .ConfigureServices(services => services.AddTransient<Flyout, PanelFlyout>()));
         MainWindow = builder.Window;
 #if DEBUG
         MainWindow.UseStudio();
@@ -48,11 +51,17 @@ public partial class App : Application
     {
         views.Register(
             new ViewMap(ViewModel: typeof(ShellModel)),
-            new ViewMap<MainPage, MainModel>());
+            new ViewMap<MainPage, MainModel>(),
+            new DataViewMap<CatalogPage, CatalogModel, CatalogRequest>(),
+            new ViewMap<BlueprintsPage, BlueprintsModel>(),
+            new DataViewMap<WrapGiftPage, WrapGiftModel, WrapGiftRequest>());
         routes.Register(
             new RouteMap("", View: views.FindByViewModel<ShellModel>(), Nested:
             [
                 new("Main", View: views.FindByViewModel<MainModel>(), IsDefault: true),
+                new("Catalog", View: views.FindByViewModel<CatalogModel>()),
+                new("Blueprints", View: views.FindByViewModel<BlueprintsModel>()),
+                new("WrapGift", View: views.FindByViewModel<WrapGiftModel>()),
             ]));
     }
 

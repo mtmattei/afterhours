@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Text.Json.Serialization;
 
 namespace Afterhours.Uno.Services;
@@ -9,4 +10,11 @@ namespace Afterhours.Uno.Services;
 [JsonSerializable(typeof(Chrome))]
 [JsonSerializable(typeof(ChatState))]
 [JsonSerializable(typeof(ReadyEvent))]
+[JsonSerializable(typeof(ShopData))]
+[JsonSerializable(typeof(OpenRequest))]
+[JsonSerializable(typeof(ActionReply))]
+[JsonSerializable(typeof(ImmutableList<OwnedItem>))]
+[JsonSerializable(typeof(ImmutableList<RoomRef>))]
+[JsonSerializable(typeof(ImmutableList<Disc>))]
+[JsonSerializable(typeof(ImmutableList<Blueprint>))]
 internal sealed partial class BridgeJsonContext : JsonSerializerContext;

@@ -16,5 +16,6 @@ test('trim warnings from generated view models and Uno.Extensions pass the gate'
 test('any other warning fails, including trim warnings in app code', () => {
   const ours = line("warning IL2026: Afterhours.Uno.Services.GameEvents.Receive(String): Using member 'System.Text.Json.JsonSerializer.Deserialize'");
   const analyzer = line('warning CA1416: This call site is reachable on all platforms.');
-  assert.equal(unexpectedWarnings([ours, analyzer, ours].join('\n')).length, 2);
+  const uno = line('warning Uno0001: Microsoft.UI.Xaml.Controls.ItemsStackPanel.ItemsUpdatingScrollMode is not implemented in Uno');
+  assert.equal(unexpectedWarnings([ours, analyzer, uno, ours].join('\n')).length, 3);
 });

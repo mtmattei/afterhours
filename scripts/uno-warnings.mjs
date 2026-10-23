@@ -9,7 +9,7 @@ const allowed = [
 ];
 
 export function unexpectedWarnings(output) {
-  const warnings = new Set(output.split(/\r?\n/).filter(line => /: warning [A-Z]+\d+/.test(line))
+  const warnings = new Set(output.split(/\r?\n/).filter(line => /: warning [A-Za-z]+\d+/.test(line))
     .map(line => line.replace(/^\s+/, '').replace(/\s+\[[^\]]*\]$/, '')));
   return [...warnings].filter(line => !allowed.some(rule => rule.test(line)));
 }

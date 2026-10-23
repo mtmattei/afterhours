@@ -35,11 +35,11 @@
       </Button>
     </Grid>
 
-    <ListView Grid.Row="1" ItemsSource="{Binding ChatLines}" SelectionMode="None" IsItemClickEnabled="False"
+    <ListView x:Name="Lines" Grid.Row="1" ItemsSource="{Binding ChatLines}" SelectionMode="None" IsItemClickEnabled="False"
               AutomationProperties.Name="Room messages" AutomationProperties.LiveSetting="Polite">
       <ListView.ItemsPanel>
         <ItemsPanelTemplate>
-          <ItemsStackPanel ItemsUpdatingScrollMode="KeepLastItemInView" VerticalAlignment="Bottom" />
+          <ItemsStackPanel VerticalAlignment="Bottom" />
         </ItemsPanelTemplate>
       </ListView.ItemsPanel>
       <ListView.ItemTemplate>

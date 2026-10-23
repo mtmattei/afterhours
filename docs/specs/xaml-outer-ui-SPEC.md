@@ -1,495 +1,535 @@
-# Spec: native XAML outer UI around the WebView room
+# Spec: Afterhours UI in Uno XAML around a JavaScript room
 
-Status: **draft, awaiting answers to Unresolved Questions.** Written 2026-10-23. No code changed yet.
+Status: **draft v2, awaiting the Unresolved Questions.** Rewritten 2026-10-23 after the migration-scope review.
+No app code changed yet.
 
-Goal: the Uno app draws its own menus, wardrobe, room browser and beat studio in XAML.
-The isometric canvas room keeps running in `WebView2` as JavaScript, along with everything
-this spec does not name.
+## Settled inputs
 
-Scope:
-- **Moves to XAML:** top bar, left rail (nav, room hopping list, resident card), the
-  room-journey strip, the game dock and profile menu, plus three panels:
-  wardrobe, room browser (solo and shared navigator) and beat studio (editor and song library).
-- **Stays in the WebView:** canvas room, room heading, scene controls, action bar, chat
-  sidebar, now-playing strip, and every other panel (profile, journal, arcade, stage,
-  catalog, companion, room tools, help, friends, trade, chart, away card). XAML menus open them.
-- **Unchanged:** `npm start`, the standalone HTML and the Worker. The JS chrome hides only
-  when the page loads with `?host=uno`.
+| Input | Answer | Source |
+|---|---|---|
+| Targets | **Web only** (`net10.0-browserwasm`) | user, 2026-10-23 |
+| Solo play | **Keep.** Browser-saved game, simulated residents, no server, standalone `Afterhours.html` | user, 2026-10-23 |
+| Room renderer | **Stays JavaScript.** A SkiaSharp port pays off only with desktop/Android | scope review + user |
+| Synth | **Stays JavaScript** (`music.js`, WebAudio). Uno has no synthesis or scheduling API | scope review |
+| Game server | **JS Worker stays.** Staged order: Phase A over JS state, Phase B ports rules to C# with shared test cases (scope review's Option 1), ASP.NET Core later if the playtest outgrows five players | recommendation; confirm in Unresolved Questions |
 
-Evidence used: `dist/game.js` (`look`, `studio`, `directory`, `openNavigator`, `window.AfterhoursWorld`),
-`dist/app.js`, `dist/online.js` (`roomDirectory`, `joinRoom`), `dist/style.css` tokens,
-`uno/Afterhours.Uno` (Uno.Sdk 6.7.30, Uno 6.7.135, `net10.0-browserwasm` only, empty `UnoFeatures`),
-the Uno WebView2 docs, and the WebView JS embedded in
-`uno.winui/6.7.135/uno-runtime/net10.0/webassembly/Uno.UI.dll`.
+## Goal and phases
+
+The Uno app owns every screen the player reads or types into: menus, HUD, chat, panels, and the room-editor
+toolbar. The isometric room canvas, the arcade rounds, the synth and the account widgets stay JavaScript.
+They run as **DOM islands** inside the Uno page, with no iframe.
+
+| Phase | Delivers | Game state owner | This spec |
+|---|---|---|---|
+| **A** | `BrowserHtmlElement` room host, XAML shell, every panel in XAML + MVUX | JS `Game` (`game-core.js`), read through C# interfaces | **full detail** |
+| **B** | `Afterhours.Core` C# rules + shared test cases; C# solo store; C# shared-world client | C# for the client; JS Worker on the server | outline only; own spec before build |
+| C | ASP.NET Core server sharing `Afterhours.Core` | C# everywhere | out of scope |
+
+The panels bind to interfaces (`IGameStore`, `ISharedWorld`, `IRoomView`, `IMusic`). Phase A implements the
+first two over JS. Phase B swaps in C# implementations without touching XAML.
+
+Evidence: `dist/*.js` (every panel, inventoried below), `session-core.mjs` (imports `game-core.js` and
+`furniture.js`), `service/scripts/build.mjs` (also bundles `wardrobe.js`), `online.js` (`W.game.dispatch`
+override: dispatches on the client, then the server re-runs it), Uno docs (`interop/wasm-javascript-1`,
+`features/using-skia-hosting-native-controls`, `controls/SKCanvasElement`, `controls/WebView`), Uno 6.7.135 package source.
 
 ---
 
 ## Architecture Brief
 
-### Targets and SDK
+### Targets, SDK and features
 
-- `net10.0-browserwasm` only, **native (DOM) renderer**: `SkiaRenderer` is absent from
-  `UnoFeatures`. XAML elements and the WebView `<iframe>` share one DOM, so XAML flyouts
-  stack above the iframe in normal z-order.
-- Uno.Sdk **6.7.30** stays pinned in `uno/global.json`.
-- `UnoFeatures`: `Hosting; MVUX; Navigation; Toolkit`. Four features, all new to this project (see Unresolved Questions).
+- `net10.0-browserwasm`, **native (DOM) renderer**: `SkiaRenderer` stays off. XAML and the JS islands share
+  one DOM, so XAML flyouts stack over the room in normal z-order, with alpha blending.
+- Uno.Sdk **6.7.30**, pinned in `uno/global.json`.
+- `UnoFeatures`: `Hosting; MVUX; Navigation; Toolkit` (all new). The WebView is removed; `AfterhoursInterop.js`
+  and its Node test are deleted.
 
 ### Decisions
 
-**D1. The JavaScript game stays the single owner of game state.**
-Reason: `game-core.js` is bundled unchanged into the Cloudflare Worker, and `online.js`
-routes the same actions to the shared service. A C# copy would fork those rules.
-Tradeoff: every XAML surface depends on the bridge, and XAML shows state the game pushes.
-It never computes economy, quests or validation itself.
+**D1. Host the game DOM with `BrowserHtmlElement` instead of `WebView2`.**
+Reason: the Uno docs document `Uno.UI.NativeElementHosting.BrowserHtmlElement` for WebAssembly. Same-page
+hosting removes the iframe, the Uno 6.7/.NET 10 `unoExports` shim, iframe user-activation limits on audio,
+and iframe focus handoff. C# and JS call each other through `[JSImport]`/`[JSExport]`.
+Tradeoff: game CSS and globals share the page with Uno. CSS gets scoped under `.ah-root` (D5), and window key
+handlers must ignore events from XAML (D6).
 
-**D2. The bridge is an app-owned `JSImport`/`JSExport` channel through the host page.**
-Reason: the Uno 6.7.135 WASM WebView implements `executeScript` as `contentWindow.eval`,
-but its JS never calls `DispatchWebMessage`, so `WebMessageReceived` does not fire on
-WASM. The game is served same-origin from `game/`, which lets the frame call
-`parent.AfterhoursUno.fromGame(json)` directly. One owned channel in both directions avoids
-depending on internal `unoExports` names. The current compatibility shim already depends on them.
-Tradeoff: the channel is WASM-specific. A future desktop head needs `WebMessageReceived`
-plus `ExecuteScriptAsync` behind the same `IGameBridge` interface.
+**D2. Phase A keeps the JS `Game` as the single writer of game state.**
+Reason: `online.js` dispatches each action on the client and then sends it to the server, which runs it again.
+A C# client copy has to match the JS server exactly or shared players see changes snap back. That port deserves
+its own phase with shared test cases (Phase B). The panels gain nothing from waiting for it.
+Tradeoff: in Phase A, C# reads state the game pushes, and every write is a call into JS.
 
-**D3. MVUX with Navigation Extensions.**
-Reason: the bridge is a push stream with real async states: the WebView is not ready, the
-game has not answered, or the frame failed. Those map directly to `IFeed` and FeedView
-Progress/Error states. Each draft has a clear owner as an `IState` (wardrobe outfit,
-studio song). Navigation `!` routes give the three panels flyout pages and drop the
-hand-toggled overlays.
-Tradeoff: about five new Uno.Extensions/Toolkit packages, a larger WASM download, and the
-`--in-process` MSBuild path on the Windows build host needs re-verification. MVVM with
-`CommunityToolkit.Mvvm` and a plain `Frame` is smaller, at the cost of hand-written
-loading and error handling for every panel.
+**D3. The panels bind to four C# interfaces.**
+Reason: they are the seam Phase B swaps. `IGameStore` (solo rules state and the 22 actions) and `ISharedWorld`
+(connection and shared snapshot) get C# implementations later. `IRoomView` (renderer) and `IMusic` (synth)
+stay JS-backed permanently.
+Tradeoff: about 30 C# records mirror the JS state shape, which `validate()` in `game-core.js` defines.
 
-**D4. Panels open as flyout pages over the room. The WebView is never navigated away.**
-Reason: reloading the iframe loses the live room, audio and online session. `MainPage`
-owns the `WebView2` for the whole session, and panels are `!` routes that open above it.
-Tradeoff: panels stay modal over the room, like the current JS dialogs.
+**D4. MVUX models, Navigation `!` routes, one persistent `MainPage`.**
+Reason: the store pushes async state with real Progress/Error cases. Each panel has one editable draft (an
+`IState`). The room host must never be navigated away, because that would drop the live room, audio and
+online session. Panels open as flyouts or dialogs over `MainPage`.
+Tradeoff: Uno.Extensions + Toolkit add download size and build time (R7).
 
-**D5. The game renders the avatar preview as an image.**
-Reason: `avatar-renderer.js` tints sprite pixels through `getImageData`, and XAML has no cheap
-per-pixel tint on the DOM renderer. The game returns a PNG data URL for `(outfit, pose)`,
-and XAML shows it in an `Image`.
-Tradeoff: one bridge round trip per wardrobe change, about 10–30 ms locally. Results are
-cached by key and the latest request wins.
+**D5. Scope game CSS under `.ah-root` at build time with esbuild (already a devDependency).**
+`scripts/build-uno.mjs` wraps each game stylesheet in `.ah-root{…}`. It rewrites `:root`, `html` and `body` to
+`&`, hoists `@import`, `@font-face` and `@keyframes` to the top level, and lets esbuild lower the nesting.
+The JS writes its `body` classes (`is-playing`, `chat-history-open`, `music-panel-open`) to the root
+element instead. `npm start` keeps loading the unscoped files.
+Tradeoff: a build transform to test. Unscoped `*{box-sizing}`, `button{}`, `input{}` and `dialog{}` rules
+would otherwise restyle Uno's own DOM.
 
-**D6. Audio, WAV export and playback timing stay in JavaScript.**
-Reason: `music.js` (WebAudio) also drives jukeboxes, the stage and room music. The studio
-sends the draft and receives `playhead` and `playback` messages.
-Tradeoff: user-activation rules for the frame's AudioContext (Risk R3).
+**D6. DOM islands for JS-only surfaces.**
+Each JS surface mounts into its own `BrowserHtmlElement`: the room canvas (`RoomHost`), an arcade round
+(`ArcadeHost`, using `AfterhoursArcade.start(kind, host, done)`), and the Turnstile check (`CaptchaHost`, R9).
+Window key handlers in `app.js`/`arcade.js` act only while focus is inside `.ah-root` or the arcade host.
+
+**D7. The room asks the XAML to open panels.**
+Canvas interactions that open panels today (furniture use, residents, players, jukebox, portals, message
+board, set complete, the doorbell) send `open {route, data}` through `IRoomView.Requests`. `MainModel` navigates.
 
 ### Shell and regions
 
 ```
-App.xaml.cs  UseToolkitNavigation · NavigateAsync<Shell>
-Shell (UserControl, ContentControl host; no Region.Attached inside)
-└─ MainPage   Grid[Region.Attached]
-   ├─ TopBar  (brand, Music toggle, Furniture shop, coins, profile MenuFlyout)
-   ├─ Rail    (nav, room hopping, resident card)         ≥ Normal(960): column; < 960: collapsed icons; < 700: hidden
-   ├─ GameView WebView2                                  always present; never navigated by routes
-   ├─ BottomBar utu:TabBar                               < 700 only
-   └─ LoadingPanel (existing)                            covers GameView until bridge `ready`
+App.xaml.cs  UseToolkitNavigation · RegisterRoutes · NavigateAsync<Shell>
+Shell (UserControl, ContentControl host; no Region.Attached)
+└─ MainPage   Grid[Region.Attached]        rows: TopBar | Body ; Body columns: Rail | Stage | Social
+   ├─ TopBar     brand · Music · Furniture shop · coins · profile MenuFlyout
+   ├─ Rail       nav · room hopping · resident card          Wide+: 220 px · Normal: 72 px icons · Narrow: hidden
+   ├─ Stage      RoomHeading · RoomHost (BrowserHtmlElement) · EditorBar | ActionBar · NowPlaying
+   ├─ Social     ChatPanel (Room chat / Friends tabs)       Wide+: column · below: !Chat flyout
+   ├─ BottomBar  utu:TabBar                                   Narrow only
+   └─ BootPanel  covers Stage until IRoomView reports Ready
 ```
 
-### Route registration
+### Services (DI)
+
+| Interface | Phase A implementation | Phase B | Members (abridged) |
+|---|---|---|---|
+| `IGameStore` | `JsGameStore` | `CoreGameStore` (C#, `localStorage` via JSImport) | `IFeed<GameState> State`; `ValueTask<ActionResult> Dispatch(GameAction, ct)` for the 22 actions; `SaveDraft(SongDraft)`; `Export()`/`Restore(GameState)`/`RestoreBackup()` |
+| `ISharedWorld` | `JsSharedWorld` (wraps `online.js`) | `HttpSharedWorld` | `IFeed<SharedState> State` (None when solo); `Connect(JoinRequest)`, `Leave`, `JoinRoom(key)`, `Say`, `Whisper`, `Friend`, `Trade*`, `Vote`, `Queue`, `Report`, `AwaySeen` |
+| `IRoomView` | `JsRoomView` | same | `Mount(elementId)`, `IFeed<RoomInfo> Room`, `IFeed<EditorState> Editor`, `IListFeed<ChatLine> Chat`, `IAsyncEnumerable<OpenRequest> Requests`; `Enter(RoomKey)`, `Wave`, `Dance`, `Stand`, `StartEditing`/`Rotate`/`Store`/`Undo`/`Finish`/`Select(itemId)`, `Zoom(in/out/fit/follow)`, `Say(text, mode)`, `Focus()` |
+| `IMusic` | `JsMusic` | same | `IFeed<Playback> Playback` (running, songId, step); `Play(SongDraft)`, `Stop`, `ExportWav(SongDraft)` (download handled in JS) |
+| `GameHost` (static partial) | — | — | the only `[JSImport]`/`[JSExport]` surface; module `game/host.js` via `JSHost.ImportAsync` |
+
+`game/host.js` (new, ES module) loads the classic game scripts in today's `index.html` order, builds the room
+markup inside the mounted element, and exposes the JS half of the four interfaces. It pushes `state`
+(the full validated `game.state`, throttled to 10/s), `shared`, `room`, `editor`, `chat`, `playback` and
+`open`. The `world` facade it calls is today's `window.AfterhoursWorld`, extended where needed.
+`BridgeJsonContext` (`System.Text.Json` source generation) keeps parsing trimming-safe.
+
+### Routes
 
 ```csharp
 views.Register(
     new ViewMap(ViewModel: typeof(ShellModel)),
     new ViewMap<MainPage, MainModel>(),
-    new DataViewMap<RoomsPage, RoomsModel, RoomFilter>(),
-    new ViewMap<CreateRoomDialog, CreateRoomModel>(),
-    new ViewMap<WardrobePage, WardrobeModel>(),
-    new ViewMap<StudioPage, StudioModel>());
-routes.Register(
-    new RouteMap("", View: views.FindByViewModel<ShellModel>(), Nested:
-    [
-        new RouteMap("Main", View: views.FindByViewModel<MainModel>(), IsDefault: true),
-        new RouteMap("Rooms", View: views.FindByViewModel<RoomsModel>()),
-        new RouteMap("CreateRoom", View: views.FindByViewModel<CreateRoomModel>()),
-        new RouteMap("Wardrobe", View: views.FindByViewModel<WardrobeModel>()),
-        new RouteMap("Studio", View: views.FindByViewModel<StudioModel>()),
-    ]));
+    // one ViewMap or DataViewMap per panel in the table below
+);
+routes.Register(new RouteMap("", View: views.FindByViewModel<ShellModel>(), Nested:
+[
+    new RouteMap("Main", View: views.FindByViewModel<MainModel>(), IsDefault: true),
+    // one RouteMap per panel, all opened from Main with "!"
+]));
 ```
 
-Opened with `!` from MainPage: `!Rooms` (data `RoomFilter`), `!Wardrobe`, `!Studio`; `!CreateRoom` from RoomsPage.
-The studio's Editor/Library tabs and the room browser's filter tabs use **inline Visibility regions**
-inside their page, with no routes.
+### Panel inventory (Phase A)
 
-### Services (DI, `IHostBuilder`)
+Each row is a `!` route opened over `MainPage`, shown as a right flyout (F) or a dialog (D). The source column
+names the JS function it replaces; that JS is deleted when the row ships.
 
-| Service | Lifetime | Role |
-|---|---|---|
-| `IGameBridge` → `WasmGameBridge` | Singleton | Owns the JS channel. Exposes `IAsyncEnumerable<HostSnapshot> Snapshots`, `IAsyncEnumerable<Playback> Playback`, `Task<BridgeReply> SendAsync(Intent, ct)` with request IDs and a 5 s timeout |
-| `HostInterop` (static partial) | n/a | `[JSImport] Post(string)` and `[JSExport] Receive(string)`; the only C# touching JS |
-| `BridgeJsonContext` | n/a | `System.Text.Json` source-generated context (trimming-safe) |
+| Wave | Route | Kind | Model data | Replaces |
+|---|---|---|---|---|
+| 2 | `Shop` | F | — | `catalog` "THE FURNITURE SHOP" |
+| 2 | `Inventory` | F | — | `showInventory` |
+| 2 | `CollectionItem` | D | `CatalogEntry` | `catalog` item "THE AFTERHOURS COLLECTION" |
+| 2 | `Blueprints` | F | — | `blueprints` |
+| 2 | `WrapGift` | D | `ItemId` | gift panel "WRAP A GIFT" |
+| 3 | `Studio` | F | — | `studio` (Editor / Library tabs) |
+| 3 | `DeleteSong` | D | `SongId` | "Delete this track?" |
+| 3 | `Stage` | F | — | `stagePanel` (solo) and shared stage "SHARED MUSIC STAGE" |
+| 3 | `SetComplete` | D | `SetResult` | "SET COMPLETE" |
+| 3 | `Jukebox` | F | `RoomId` | `playlistPanel` |
+| 3 | `Chart` | F | — | `chartPanel` |
+| 4 | `Wardrobe` | F | — | `look` + `classicLook` |
+| 4 | `Profile` | F | — | `profile` |
+| 4 | `RestoreSave` | D | `GameState` | "Restore this world?" / "Recover your last backup" |
+| 4 | `Journal` | F | — | `journal` (quests, daily gift, badges) |
+| 4 | `Help` | F | — | "HOW TO PLAY" + first-visit welcome |
+| 5 | `Rooms` | F | `RoomFilter` | `directory` + shared `roomDirectory` |
+| 5 | `CreateRoom` | D | — | "CREATE A ROOM" |
+| 5 | `RoomTools` | F | `RoomId` | `roomTools` + "ROOM SETTINGS" |
+| 5 | `RoomLogic` | F | `RoomId` | `rulesPanel` |
+| 5 | `RoomEvent` | D | `RoomId` | `eventPanel` |
+| 5 | `MessageBoard` | F | `RoomId` | `notesPanel` |
+| 5 | `Portal` | D | `ItemId` | "LINK A PORTAL" |
+| 5 | `RoomObject` | D | `ItemId` | `openObject` / `itemDetails` "ROOM INTERACTION" |
+| 5 | `Companion` | F | — | `petPanel` + "ADOPT A COMPANION" |
+| 5 | `Arcade` | F | `ArcadeKind?` | `arcade` (picker in XAML; round in `ArcadeHost` island) |
+| 6 | `Friends` | F | — | "YOUR CIRCLE" + shared `friendsPanel` |
+| 6 | `Resident` | D | `ResidentId` | `residentProfile` |
+| 6 | `Player` | D | `PlayerId` | `playerPanel` "CONNECTED PLAYER" |
+| 6 | `Report` | D | `PlayerId` | "Report a player" |
+| 6 | `Trade` | F | `TradeId?` | `tradePanel` |
+| 6 | `Away` | D | — | `awayPanel` |
+| 6 | `SharedWorld` | F | — | "SHARED WORLD" / "SHARED SESSIONS" info |
+| 6 | `ChatPrefs` | D | — | "CHAT PREFERENCES" |
+| 6 | `Chat` | F | — | chat column on narrow widths |
+| 7 | `Join` / `Restore` / `SignOut` | D | — | account panels (Turnstile in `CaptchaHost`, Supabase JS unchanged) — **R9 gated** |
 
-### Bridge protocol (version 1)
+Wave 1 has no routes: it builds `MainPage` (top bar, rail, room heading, action bar, editor bar, now playing,
+chat column) and the four interfaces.
 
-Game → XAML (`parent.AfterhoursUno.fromGame`). Every message carries `{v:1, type}`.
+### Models (pattern; one per route)
 
-| type | When | Payload |
-|---|---|---|
-| `ready` | game boot done | `mode` (`solo`/`shared`), `wardrobe` catalog (hair, tops, bottoms, colour lists, presets) |
-| `snapshot` | after any `game.save` / online apply, throttled to one per animation frame | `hud` (coins, name, level, xp band, questsReady, nextQuest, daily), `room` (key, title, kind), `rooms[]` (key, name, description, kind, owner, count, door, art, favorite, recent rank), `outfit`, `spriteIndex`, `songs[]`, `draft`, `connected` |
-| `playback` | music start/stop, each step | `running`, `songId`, `step` |
-| `reply` | each intent | `id`, `ok`, `error`, `result` |
+- **Read side:** derived feeds from the store, e.g. `ShopModel.Items = Store.State.Select(Catalog.ForSale)`.
+  A record with `Id` gets key equality for free.
+- **Write side:** public methods call `Store.Dispatch(new BuyAction(type))` and show the returned error
+  inline. They never edit state locally.
+- **Drafts:** `IState<T>` local to the panel (wardrobe outfit, studio song, profile form, room form, trade offer).
+  Seeded once from the store when the panel opens, and committed by one command.
+- `StudioModel.Draft` also saves through `Store.SaveDraft` (debounced 300 ms). The playhead comes from
+  `IMusic.Playback` and moves one overlay element, so step cells never rebuild per tick.
+- `WardrobeModel.Preview` = Combine(Draft, Pose).SelectAsync(`IRoomView.RenderAvatar`) → PNG data URL.
+  `avatar-renderer.js` keeps the pixel tinting (scope review question 3: yes, through the bridge).
 
-XAML → game (`AfterhoursHost.receive` in the frame). Each intent calls **the same JS function the old button called**:
+### Phase B outline (own spec before building)
 
-| intent | Calls |
-|---|---|
-| `room.enterPublic {index}` / `room.visitOwn` / `room.enter {key}` | `enterRoom`, `visitRoom`, or `AfterhoursOnline.joinRoom` when connected |
-| `room.create {name, description, tags}` | `act('room', …)` then `visitRoom` |
-| `panel.open {name}` | `journal`, `arcade`, `stagePanel`, `catalog`, `petPanel`, `roomTools`, `profile`, help, join/leave shared |
-| `music.toggle` | the existing room-music toggle |
-| `wardrobe.preview {outfit, pose}` | `AfterhoursAvatar.preview` on an offscreen canvas → `toDataURL` |
-| `wardrobe.save {outfit}` / `wardrobe.classic {index}` | `act('outfit', …)` / the `classicLook` save path |
-| `studio.play {draft}` / `studio.stop` / `studio.playSong {id}` | `playSong`, `stopMusic` |
-| `studio.saveDraft {draft}` / `studio.save {draft}` | `saveDraft`, `act('song', …)` |
-| `studio.export {draft}` | `music.wav` → `download` |
-| `studio.perform / disc / delete {id}` | `queueSong`, `act('disc')`, `act('deleteSong')` |
-
-The JS half lives in a new `dist/host-bridge.js`, written as a UMD factory `createHostBridge(world, post)` in the
-`wardrobe.js` style so Node tests can drive it with a fake `world`.
-
-### Models
-
-- `MainModel(IGameBridge, INavigator)`: `IFeed<Hud> Hud`, `IListFeed<RoomStop> PublicRooms`,
-  `IFeed<BridgeStatus> Status`; commands `EnterPublic(RoomStop)`, `VisitHome`, `OpenPanel(string)`,
-  `ToggleMusic`, `Retry`.
-- `RoomsModel(IGameBridge, INavigator, RoomFilter)`: `IState<RoomFilter> Filter`, `IState<string> Query`
-  (initial `""`; Feed.Combine starts as None when any parent is None), `IListFeed<RoomEntry> Rooms` =
-  Combine(snapshot.rooms, Filter, Query).Select(filter); `Enter(RoomEntry)` closes the flyout on success.
-- `CreateRoomModel`: `IState<string>` Name/Description/Tags, `Create` → `room.create`, inline error.
-- `WardrobeModel(IGameBridge)`: `IFeed<WardrobeCatalog> Catalog`, `IState<Outfit> Draft` (seeded from the snapshot),
-  `IState<Pose> Pose`, `IFeed<AvatarPreview> Preview` = Combine(Draft, Pose).SelectAsync(preview);
-  `ApplyPreset(int)`, `Pick(OutfitChoice)`, `Save`, `UseClassic(int)`.
-- `StudioModel(IGameBridge)`: `IState<SongDraft> Draft` (**single writer while open**, seeded once
-  from the snapshot; later draft echoes from the game are ignored), `IListFeed<Lane> Lanes` = Draft.Select,
-  `IFeed<Playback> Playback`, `IListFeed<Song> Songs`; undo stack inside the model (max 40); commands
-  `ToggleStep(StepCell)`, `ToggleMute(int)`, `Solo(int)`, `SetVolume`, `SetTempo`, `SetLength`, `Undo`, `Clear`,
-  `NewTrack`, `PlayPause`, `Save`, `Export`, `PlaySong`, `EditSong`, `Perform`, `PressDisc`, `Delete`.
-  Every draft edit sends `studio.saveDraft`, debounced to 300 ms.
-- Records: `Hud`, `RoomStop`, `RoomEntry(Key,…)`, `RoomFilter`, `Outfit`, `WardrobeCatalog`, `AvatarPreview(Key, Uri)`,
-  `SongDraft`, `Lane`, `StepCell(Row, Step, On, BarStart)`, `Song(Id,…)`, `Playback`. All `partial record`, no `required`.
+1. **Shared test cases:** `tests/vectors/*.json` hold `{state, action, now, expect: {state | error}}` for all
+   22 actions, `validate`, and day/ISO-week rollovers. `node --test` runs them against `game-core.js` today.
+2. **`Afterhours.Core`:** C# records + a reducer + `Validate` + furniture catalog + wardrobe tables. An xUnit
+   project runs the same vectors, and CI fails if either side diverges.
+3. **`CoreGameStore`** for solo, reading and writing the same `afterhours-v5` save. Existing players keep
+   their worlds.
+4. **`HttpSharedWorld`:** the C# client for the Worker API (`/api/*`), with the optimistic dispatch done by
+   `Afterhours.Core`.
+5. `movement.js` and `seating.js` stay with the JS renderer; the server only checks movement distance.
+   Delete the JS client copies of `game-core`/`furniture`/`wardrobe` only once they leave the server too (Phase C).
 
 ### Platform constraints
 
-- Keyboard: room keys (arrows/WASD, 1/2, R) work only while the iframe has focus. On flyout close, focus
-  returns to `GameView` (R4).
-- The JS panels still open inside the iframe's `<dialog>`, so they centre on the room area.
-- Hosted mode: `game/index.html?host=uno` sets `data-host="uno"` on `<html>`. CSS hides `.topbar`, `.rail`,
-  `.room-journey`, `.game-dock` and the top tools. The game skips the `look`/`studio`/`directory` modals
-  and forwards those openings to XAML (`open {panel}` message). This covers JS entry points such as the
-  "Make a beat" button and online panels.
+- `localStorage` keys stay as they are (`afterhours`, `afterhours-v5`, `-backup`, `-online-cache`,
+  `afterhours-account-resume`). Phase A changes no save format.
+- Downloads (save export, WAV) stay JS `a.download`. File import uses the XAML `FileOpenPicker` on WASM (R10),
+  then calls `IGameStore.Restore`.
+- OAuth redirect stays on `account-callback.html`.
+- `npm start` and `Afterhours.html` keep the full JS UI until the end of Phase A. After that, whether to keep
+  the JS panels for the standalone build is an Unresolved Question.
 
 ### Testing and validation
 
-- `tests/test-host-bridge.cjs` (Node): every intent calls the expected `world` function; replies carry
-  the request ID; errors become `ok:false`; snapshots are throttled; a `?host` without `uno` leaves standalone behaviour alone.
-- `npm test` and `npm run build:uno` stay green; `verify-uno.mjs` also checks the published `host-bridge.js`.
-- Runtime: Playwright (Chromium at `/opt/pw-browsers`) against `npm run start:uno`, at 1440, 1000, 800 and 390 px:
-  open each panel, change an outfit and save, build and save a track, play it and watch the playhead, filter
-  and enter a room, create a room, and run the two-tab shared-world check from `PLAYTEST-SETUP.md`.
-  Screenshots go to `docs/screenshots/`.
+- `npm test` stays green after every wave. New tests:
+  - `tests/test-host.cjs`: host.js script order, mount into a given element, event throttling, `open` requests.
+  - `tests/test-scope-css.mjs`: no unscoped selector in the scoped output; keyframes and font-face hoisted.
+- **C# tests:** a new `uno/Afterhours.Uno.Tests` (xUnit, `net10.0`) for record parsing (`BridgeJsonContext`
+  against a captured `game.state`), model filtering (rooms, shop) and the studio undo stack. Phase B adds
+  the vector runner here.
+- **Runtime:** Playwright (Chromium, `/opt/pw-browsers`) against `npm run start:uno` at 1440, 1000, 800 and
+  390 px, one script per wave. Each script covers every route in that wave: open, change, commit, reload,
+  confirm persisted. Solo and shared both run, using the two-tab check from `PLAYTEST-SETUP.md`. Screenshots
+  go to `docs/screenshots/`.
+- `verify-uno.mjs` checks `game/host.js` and the scoped CSS in the publish output, and that no WebView
+  remains in the publish output.
 
 ### Capability inventory
 
 | Capability | Status | Choice |
 |---|---|---|
-| Top bar: brand, coins, profile menu, music toggle, furniture shop | implemented | XAML; menu items call `panel.open` |
-| Rail nav + room hopping list + resident/XP card + daily gift | implemented | XAML from `snapshot.hud` |
-| Room-journey strip | implemented | merged into rail room hopping (XAML) |
-| Game dock (Stage, Catalog, My rooms, Companion, Room tools) | implemented | XAML commands → `panel.open` / `!Rooms` |
-| Room browser: All / Mine / Favorites / Recent, search | implemented | `RoomsPage` |
-| Shared navigator: owner, guest count, doorbell | implemented | same page, `kind=shared` rows |
-| Create a room | implemented | `CreateRoomDialog` |
-| Wardrobe: presets, hair/top/bottom, colours, skin, poses | implemented | `WardrobePage` |
-| Wardrobe preview | **substituted** | game renders the PNG (D5) |
-| Classic sprite picker | implemented | wardrobe footer list |
-| Studio editor: 4 lanes, 16/32 steps, mute/solo/volume, tempo, pack, undo, clear | implemented | `StudioPage` |
-| Studio audio, playhead, WAV export | **substituted** | stays in JS (D6) |
-| Song library: play, edit, perform, press disc, delete | implemented | Library tab + delete dialog |
-| Profile, journal, arcade, stage, catalog, companion, room tools, help, friends, trade, chart, away card | **omitted** (stay JS) | opened from XAML menus |
-| Chat sidebar, room heading, now-playing | **omitted** (stay JS) | inside the WebView |
-| Standalone HTML, `npm start` | implemented | unchanged without `?host=uno` |
+| Menus, HUD, rail, room hopping, resident card | implemented | XAML (wave 1) |
+| Room heading, action bar (wave, dance, stand, dock), now playing | implemented | XAML (wave 1) |
+| Room-editor toolbar, zoom/fit/follow | implemented | XAML → `IRoomView` (wave 1) |
+| Chat column: room chat, shout/whisper modes, history | implemented | XAML ← `IRoomView.Chat` (wave 1) |
+| Speech bubbles, arrival cues, room intro card | **omitted** (stay JS) | drawn on the canvas |
+| The 35 panels in waves 2–6 of the inventory | implemented | XAML routes |
+| Account panels with Turnstile + Google | **substituted** | XAML dialogs; Turnstile in `CaptchaHost` island; Supabase JS unchanged (wave 7, R9) |
+| Wardrobe preview tinting | **substituted** | rendered by `avatar-renderer.js` |
+| Synth, playhead timing, WAV export | **substituted** | JS behind `IMusic` |
+| Arcade rounds (Tile Rush, Snow Jam, Pop Quiz) | **substituted** | JS in `ArcadeHost` island; picker and results in XAML |
+| Room renderer, movement, seating, furniture placement | **omitted** (stay JS) | `RoomHost` island |
+| Solo play, browser saves, backups | implemented | unchanged; `IGameStore` |
+| C# rules, C# shared client | **deferred** | Phase B |
+| Desktop/Android heads, SkiaSharp renderer | **omitted** | web only |
 
 ---
 
 ## Design Brief
 
-- **Direction:** match the current app chrome: midnight panels, one acid accent, a condensed display face.
-  No new colours. The XAML should be indistinguishable from today's CSS at a glance.
-- **Theme:** keep Fluent `XamlControlsResources` (the project's existing theme), `RequestedTheme="Dark"` only,
-  because the CSS declares `color-scheme: dark` and has no light palette. Controls are tuned with Fluent
-  lightweight keys (`ButtonBackground*`, `ToggleButtonBackgroundChecked*`, `TextControl*`, `FlyoutPresenter*`).
-  Material/Simple themes are not adopted.
+- **Direction:** keep today's look: midnight surfaces, one acid accent, a condensed display face. XAML
+  should be indistinguishable from the current CSS at a glance. Refinements come later through
+  `gold-standard-pass`.
+- **Theme:** keep Fluent `XamlControlsResources` (the project's theme). Dark only, because the CSS
+  declares `color-scheme: dark` with no light palette. Controls are tuned with Fluent lightweight keys
+  (`Button*`, `ToggleButton*`, `TextControl*`, `FlyoutPresenter*`, `ContentDialog*`, `Pivot*`).
 
 ### Tokens (`Themes/Tokens.xaml`, merged in App.xaml; values from `dist/style.css :root`)
 
 | Key | Value | Use |
 |---|---|---|
-| `SurfaceBaseBrush` | `#14141B` | page, WebView backdrop |
-| `SurfacePanelBrush` | `#1C1C25` | rail, flyouts, cards |
-| `SurfaceRaisedBrush` | `? pending`, read from `.directory-room` / `.furniture-card` CSS during build | cards, chips |
-| `LineBrush` | `#FFFFFF0C` | dividers, card strokes |
+| `SurfaceBaseBrush` | `#14141B` | page, room backdrop |
+| `SurfacePanelBrush` | `#1C1C25` | rail, chat, flyouts |
+| `SurfaceRaisedBrush` | `? pending`, from `.directory-room` / `.furniture-card` CSS in wave 1 | cards, chips, step cells |
+| `LineBrush` | `#FFFFFF0C` | dividers, strokes |
 | `InkBrush` | `#F3F1E9` | primary text |
 | `MutedBrush` | `#92929F` | secondary text (6.3:1 on base) |
-| `AcidBrush` | `#DFED8C` | accent fill, active nav, rank numerals |
-| `OnAcidBrush` | `#14141B` | text on acid fills |
+| `AcidBrush` | `#DFED8C` | accent fill, active state, focus |
+| `OnAcidBrush` | `#14141B` | text on acid |
+| `ChatColor0..7` | `G.chatColors` | name blocks in chat |
 
-- **Type ramp** (styles in `Themes/Type.xaml`): `DisplayText` Barlow Condensed SemiBold 34; `TitleText` DM Sans Bold 18;
-  `BodyText` DM Sans Regular 13; `LabelText` DM Sans Bold 13; `EyebrowText` Space Grotesk Medium 10, caps
-  (CharacterSpacing 150 on the DOM renderer; R6). No literal `FontSize` in pages.
+- **Type ramp** (`Themes/Type.xaml`): `DisplayText` Barlow Condensed SemiBold 34 · `TitleText` DM Sans Bold 18 ·
+  `BodyText` DM Sans 13 · `LabelText` DM Sans Bold 13 · `EyebrowText` Space Grotesk Medium 10 caps,
+  CharacterSpacing 150 (R6) · `NumeralText` DM Sans Bold, tabular. No literal `FontSize` in pages.
 - **Fonts:** `Assets/Fonts/DMSans_Regular.ttf`, `DMSans_Bold.ttf`, `BarlowCondensed_SemiBold.ttf`,
-  `SpaceGrotesk_Medium.ttf`: static instances, underscore names, OFL, family by `ms-appx:///…#Family`.
-- **Spacing/radii:** 4-pt steps (4, 8, 12, 16, 24, 32); radii 8 (chips, steps), 12 (cards), 16 (flyouts).
-- **Scopes:** tokens, type and control lightweight keys live in App.xaml. Page-only templates (step cell, swatch,
-  room card) live in each page's `Page.Resources`.
-- **Templates:** `RoomCardTemplate` (art 140 px, name, description, kind tag), `RoomStopTemplate` (rail),
-  `SwatchTemplate` (32 px circle, selected ring + check glyph), `ChoiceChipTemplate`, `StepCellTemplate`
-  (ToggleButton 28×36, bar-start tick), `SongCardTemplate` (sleeve by pack, actions row).
-- **Room art:** `game/assets/room-atlas.webp` (3 stacked rows), `side-b.webp` and `my-room.webp`, by URL relative to
-  the app base. Atlas rows are cropped by a clipped container with a `TranslateTransform`, from a C# crop
-  table that mirrors `.destination-art`.
+  `SpaceGrotesk_Medium.ttf`: static, underscore names, OFL. The game's Google Fonts `@import` stays for the
+  JS islands.
+- **Spacing/radii:** 4-pt steps; radii 8 (chips, cells), 12 (cards), 16 (flyouts).
+- **Scopes:** tokens, type and control keys in App.xaml. Templates live in their page's resources. Templates
+  shared by several panels (`ItemCardTemplate`, `SongCardTemplate`, `RoomCardTemplate`, `PersonRowTemplate`)
+  live in `Themes/Templates.xaml`.
+- **Art in XAML:** furniture, room and avatar art come from `game/assets/*.webp` by URL. Furniture cards
+  crop atlas cells using the crop tables `host.js` exports (`furnitureCrops`, `newCrops`, collector JSON),
+  in a clipped container with a `TranslateTransform`. Avatars and portraits use PNGs that
+  `IRoomView.RenderAvatar` returns.
 - **Adaptive** (`utu:ResponsiveLayout` app-wide: Narrow 700 / Normal 960 / Wide 1200 / Widest 1600, matching the CSS):
-  - Widest/Wide: rail 220 px with labels; flyouts on the right: Rooms 480, Wardrobe 760, Studio 1040 (capped to 92% width).
-  - Normal: rail 72 px icons only; same flyouts.
-  - Narrow and below: rail hidden, bottom `utu:TabBar` (Explore, My room, Studio, Look, More); flyouts full-screen from the bottom.
-  - Column widths stay fixed and Responsive values sit on elements, per the house rule.
+  - Wide+: rail 220 · chat column 300 · flyouts 480 (lists), 760 (wardrobe), 1040 (studio, capped at 92%).
+  - Normal: rail 72 icons · chat as `!Chat` flyout.
+  - Narrow: rail and chat hidden · bottom `utu:TabBar` (Explore, My room, Studio, Chat, More) · flyouts full-screen.
+  - Responsive values sit on elements, with fixed columns, per the house rule.
+- **Overlay note:** on the native renderer, translucent XAML over the room blends normally. On the Skia
+  renderer, native elements do not alpha-blend (Uno docs), so translucent overlays over the room would need
+  to become opaque. This matters only if the renderer ever switches.
 
 ## Interaction Brief
 
-### Flows
+### Core flows (route sequences)
 
-1. **Boot:** LoadingPanel → WebView navigates to `game/index.html?host=uno` → `ready` → LoadingPanel hides.
-   With no `ready` within 15 s, it shows the existing retry state.
-2. **Explore:** rail "Explore" → `!Rooms` (All) → filter, search → tap card → `room.enter` → on reply ok the
-   flyout closes and focus returns to the room. Shared doorbell rooms reply `waiting`: the card shows "Ringing…"
-   and the flyout stays open.
-3. **My rooms:** dock or tab → `!Rooms` with `RoomFilter.Mine` → "＋ Create a room" → `!CreateRoom` → create →
-   reply → both close and the room loads.
-4. **Look:** rail "My look" → `!Wardrobe` → pick preset/parts/colours (preview updates) → "Save look" →
-   `wardrobe.save` → flyout closes; the toast appears in the room as today.
-5. **Studio:** rail "Beat studio" or the room's "Make a beat" (JS forwards `open studio`) → `!Studio` Editor tab →
-   toggle steps, tempo, pack → Play (playhead runs) → Save track → Library tab → Perform → flyout closes, stage panel
-   opens in the room.
-6. **Other panels:** rail/dock/profile items → `panel.open` → JS dialog inside the room.
+1. **Boot:** BootPanel → `GameHost.Load` → `IRoomView.Mount(RoomHost.Id)` → `Ready` → BootPanel hides.
+   Over 15 s or on a script error → Error state with Retry, which reloads the page.
+2. **Shop:** TopBar "Furniture shop" → `!Shop` → item → `!CollectionItem` → Buy → `Dispatch(Buy)` → close both →
+   `IRoomView.Select(itemId)` places it (editor bar appears).
+3. **Studio:** Rail "Beat studio" → `!Studio` (Editor) → steps, tempo, pack → Play (playhead) → Save → Library →
+   Perform → `-` → `!Stage`.
+4. **Look:** Rail "My look" → `!Wardrobe` → parts, colours, pose → Save → `Dispatch(Outfit)` → `-`.
+5. **Explore:** Rail "Explore" / room hopping "All rooms" → `!Rooms` → filter, search → card →
+   `IRoomView.Enter` (solo) or `ISharedWorld.JoinRoom` (shared; doorbell → "Ringing…", flyout stays) → `-`.
+6. **Room-initiated:** click jukebox / resident / player / portal / board → `IRoomView.Requests` → `MainModel`
+   navigates `!Jukebox`, `!Resident`, and so on, with the data.
+7. **Chat:** type in the chat box → Enter → `IRoomView.Say(text, mode)` → bubble drawn on canvas + line in the list.
 
-### Input
+### Input and focus
 
-- Pointer and touch on all XAML; Tab order rail → top bar → WebView → bottom bar.
-- Studio keys while the board has focus: Space play/pause, Ctrl+Z undo, arrows move between steps, Enter toggles.
-- Esc closes any flyout (Navigation default) and returns focus to the room.
+- Tab order: TopBar → Rail → RoomHost → ActionBar → Chat. Room keys (arrows/WASD, 1/2, R, Space-drag) work
+  while `RoomHost` has focus.
+- When a flyout closes or a room is entered, focus returns through `IRoomView.Focus()`. Clicking the room
+  focuses it, as today.
+- Studio board: arrows move between cells, Enter/Space toggles, Ctrl+Z undoes, P plays.
+- Esc closes the top flyout or dialog (Navigation default).
 
-### States per async node
+### Async states (applies to every panel)
 
 | Node | Value | Progress | None | Error |
 |---|---|---|---|---|
-| MainPage `Hud` | top bar + rail | skeleton rail, coins "—" | n/a: `ready` always sends one | "Can't reach your world" + Retry |
-| Rooms list | cards | 4 skeleton cards | "No rooms match this search." / "No favourites yet." | inline banner + Retry |
-| Wardrobe preview | image | previous image + 40% dim | n/a | last good image + "Preview unavailable" |
-| Studio songs | grid | skeleton cards | "Your first track is waiting." + New track | banner + Retry |
-| Any intent reply | close / refresh | button disabled + label ("Saving…") | n/a | `InfoBar` in the panel with the game's message; 5 s timeout → "The room didn't answer. Try again." |
+| `MainModel.Hud` | top bar + rail | coins "—", skeleton rail | n/a: a ready game always has state | BootPanel Error + Retry |
+| list panels (Shop, Inventory, Rooms, Songs, Friends, Chart, Board, Blueprints) | items | skeleton cards ×4 | panel-specific copy from today's JS (e.g. "No rooms match this search.") | inline banner + Retry |
+| `SharedState` consumers | shared UI | "Connecting…" | solo view (shared sections hidden) | "Shared world unavailable" + Retry; solo keeps working |
+| `Wardrobe.Preview` | image | last image dimmed 40% | n/a | last good image + "Preview unavailable" |
+| any `Dispatch` | close / refresh | command disabled + verb label ("Buying…") | n/a | `InfoBar` with the game's own message (`e.message`) |
 
-### Visual states
+### Visual states and colour cues
 
-Nav item: Normal / PointerOver / Pressed / Selected (acid bar **plus** bold label) / Disabled.
-Step cell: Off / On (acid fill **plus** inner dot) / Current (outline ring) / BarStart (left tick).
-Swatch: Normal / Selected (ring **plus** check glyph). Mute/Solo: toggled (acid **plus** letter weight).
+Nav item Selected: acid bar **plus** bold label. Step cell On: acid fill **plus** centre dot; Current:
+outline ring. Swatch Selected: ring **plus** check glyph. Owned item: "Owned" text **plus** dim price.
+Toggle (mute, solo, favourite): acid **plus** glyph swap. No state rides on colour alone.
 
 ### Motion
 
-- Flyout: Toolkit drawer default open/close. Reduced motion: no slide (R5).
-- Preview cross-fade 120 ms `EaseOut` (`Motion.Fast`). Reduced: instant swap.
-- Playhead: an overlay ring that snaps one step at a time with no tween. A single element moves, so cells are
-  not rebuilt on each tick.
+- Flyouts: Toolkit drawer default. Reduced motion: plain presenter with no transition (R5).
+- Preview and portrait swap: 120 ms fade (`Motion.Fast`, EaseOut). Reduced: instant.
+- Playhead: snaps per step with no tween. Coin change: no animation (numerals are tabular, so the width holds).
 
 ### Accessibility
 
-- `AutomationProperties.Name` on every icon-only button. Step cells are named "Kick step 5, on". Swatches carry
-  the colour name. Room cards read "Side B, public room".
-- The selected/on state is never carried by colour alone (cues above).
-- Text contrast: Ink and Muted on Base and Panel ≥ 4.5:1; OnAcid on Acid ≥ 12:1.
-- Focus visuals: Fluent defaults, kept.
+- `AutomationProperties.Name` on every icon-only control. Step cells read "Kick step 5, on", swatches read
+  their colour name, room cards read "Side B, public room, 6 people".
+- Chat list is a live region (`AutomationProperties.LiveSetting="Polite"`), matching today's `aria-live`.
+- Text contrast ≥ 4.5:1 for Ink/Muted on Base/Panel; OnAcid on Acid ≥ 12:1. Fluent focus visuals kept.
 
-### Runtime verification (uno-verify via Playwright on WASM)
+### Runtime verification (per wave)
 
-At each breakpoint: rail state, flyout size, bottom bar. Per flow above: screenshots plus DOM assertions
-(coins change after a purchase made in the room; outfit persists after reload; a saved track appears in the
-library after reload; the playhead moves while playing; Esc returns keyboard control to the room).
+Playwright on WASM at four widths. Per route: open, act, verify the store change (coins, item counts, saved
+track, outfit after reload), Esc returns focus to the room. Shared: two tabs, chat round trip, applause pays,
+doorbell. Screenshots per route in `docs/screenshots/xaml/`.
 
 ## Spec Graph Brief
 
 ### Route tree
 
 ```
-Shell (ContentControl host; no Region.Attached)
-└─ Main         ViewMap<MainPage, MainModel>  IsDefault
-   ├─ Rooms !       flyout · DataViewMap<RoomsPage, RoomsModel, RoomFilter>
-   │  └─ CreateRoom !   dialog · ViewMap<CreateRoomDialog, CreateRoomModel>   back: '-' to Rooms
-   ├─ Wardrobe !    flyout · ViewMap<WardrobePage, WardrobeModel>
-   └─ Studio !      flyout · ViewMap<StudioPage, StudioModel>
-      └─ [Visibility region] Editor (default) | Library        inline content
+Shell (no Region.Attached)
+└─ Main   ViewMap<MainPage, MainModel>  IsDefault        ← all routes below open with "!" from Main
+   ├─ wave 2  Shop F · Inventory F · CollectionItem D(CatalogEntry) · Blueprints F · WrapGift D(ItemId)
+   ├─ wave 3  Studio F ─ DeleteSong D(SongId) · Stage F · SetComplete D(SetResult) · Jukebox F(RoomId) · Chart F
+   ├─ wave 4  Wardrobe F · Profile F ─ RestoreSave D(GameState) · Journal F · Help F
+   ├─ wave 5  Rooms F(RoomFilter) ─ CreateRoom D · RoomTools F(RoomId) ─ RoomLogic F · RoomEvent D · Portal D(ItemId)
+   │          MessageBoard F(RoomId) · RoomObject D(ItemId) · Companion F · Arcade F(ArcadeKind?)
+   ├─ wave 6  Friends F ─ Trade F(TradeId?) · Resident D · Player D ─ Report D · Away D · SharedWorld F · ChatPrefs D · Chat F
+   └─ wave 7  Join D · Restore D · SignOut D
+Back: "-" closes one level. Rooms→CreateRoom success closes both. Studio→Perform: "-" then "!Stage".
 ```
 
-Back: `-` closes a flyout. Entering a room closes Rooms and CreateRoom with `-` twice. No route ever clears Main.
-
-### Page trees
+### Page trees (MainPage; panel trees are written per wave, under 15 nodes each)
 
 ```
-MainPage @page
-├─ TopBar   ← Hud {Progress: "—"}           MenuFlyout ⇒ OpenPanel
-├─ Rail     ← Hud, PublicRooms              → !Rooms · !Studio · !Wardrobe · EnterPublic · VisitHome
-├─ GameView WebView2                        platform glue (xaml-lint: allow codebehind - bridge host)
-├─ BottomBar utu:TabBar  [Responsive Visibility]
-└─ Status   ← FeedView(Status) {Progress, Error→Retry}
-
-RoomsPage @page
-├─ FilterTabs [Visibility region: All|Mine|Favorites|Recent]  ⇒ Filter
-├─ Search TextBox  ⇒ Query (PropertyChanged)
-├─ RoomsRepeater ← FeedView(Rooms) {Value, Progress, None, Error}  Navigation n/a → Enter cmd
-└─ CreateButton → !CreateRoom
-
-WardrobePage @page
-├─ Preview Image ← FeedView(Preview) {Value, Progress(dim), Error(last good)}
-├─ Poses (3 toggles) ⇒ Pose
-├─ Presets / Hair / Top / Bottoms / Skin  ← Catalog, Draft  ⇒ Pick / ApplyPreset
-└─ Footer: Classic list ⇒ UseClassic · Save ⇒ Save
-
-StudioPage @page
-├─ Tabs [Visibility region: Editor|Library]
-├─ Editor: Name/Pack ⇒ Draft · Lanes ItemsRepeater ← Lanes  ⇒ ToggleStep/Mute/Solo/Volume
-│          PlayheadRing ← Playback.step · Tempo/Length/Undo/Clear · Play/Save/New/Export
-└─ Library: SongsRepeater ← FeedView(Songs) {Value, Progress, None, Error} ⇒ PlaySong/EditSong/Perform/PressDisc/Delete
+MainPage
+├─ TopBar     ← Hud {Progress}   MenuFlyout ⇒ Navigate(!Profile, !Journal, !Help, !SharedWorld, !Join/!SignOut)
+├─ Rail       ← Hud, PublicRooms   → !Rooms · !Studio · !Wardrobe · !Journal · !Arcade · Enter(RoomKey)
+├─ RoomHeading ← IRoomView.Room    ⇒ Dispatch(Favorite)
+├─ RoomHost   BrowserHtmlElement (xaml-lint: allow codebehind - native element mount)
+├─ EditorBar  ← IRoomView.Editor  [visible while editing] ⇒ Rotate/Store/Undo/Finish · → !Inventory
+├─ ActionBar  ⇒ Wave/Dance/Stand/StartEditing · → !Stage !Shop !Rooms(Mine) !Companion !RoomTools
+├─ NowPlaying ← IMusic.Playback, Room   ⇒ Play/Stop · → !Studio
+├─ ChatPanel  ← IRoomView.Chat {None: welcome copy}  ⇒ Say(text, mode) · → !ChatPrefs !Friends
+├─ BottomBar  [Narrow]
+└─ BootPanel  ← FeedView(Status) {Progress, Error→Retry}
 ```
 
 ### Data-flow graph
 
 ```
-JS game ──fromGame──▶ HostInterop.Receive ──▶ WasmGameBridge
-   ├─ Snapshots ──▶ MainModel.Hud, .PublicRooms
-   │            ├─▶ RoomsModel.Rooms  (Combine with Filter, Query)
-   │            ├─▶ WardrobeModel.Draft (seed once)
-   │            └─▶ StudioModel.Draft (seed once), .Songs
-   ├─ Playback  ──▶ StudioModel.Playback
-   └─ Replies   ──▶ SendAsync awaiters
-XAML commands ──SendAsync──▶ HostInterop.Post ──toGame──▶ host-bridge.js ──▶ AfterhoursWorld / act()
-Writers: Filter, Query ⇐ RoomsPage only · Wardrobe Draft/Pose ⇐ WardrobeModel commands only ·
-         Studio Draft ⇐ StudioModel commands only (game echoes ignored while open) · game state ⇐ JS only
+JS Game (game-core) ── state ──▶ JsGameStore.State ──▶ every panel's read feeds
+online.js ─────────── shared ──▶ JsSharedWorld.State ─▶ Rooms, Friends, Stage, Chart, Trade, Away, Player
+app.js renderer ── room/editor/chat/open ─▶ JsRoomView ─▶ MainPage, Rooms, room-initiated routes
+music.js ──────────── playback ──▶ JsMusic.Playback ──▶ NowPlaying, Studio playhead
+Writers:
+  game state      ⇐ JS Game only (inputs: XAML Dispatch + canvas actions, serialized on the JS thread)
+  shared state    ⇐ server only (via online.js)
+  panel drafts    ⇐ their own model's commands (seed once on open)
+  studio draft    ⇐ StudioModel while open; Store.SaveDraft persists it
+Phase B swaps: JsGameStore → CoreGameStore, JsSharedWorld → HttpSharedWorld (same interfaces, XAML unchanged)
 ```
 
 ### Design graph
 
 ```
-App.xaml @App  (Dark only → StaticResource is correct)
-├─ SurfaceBaseBrush #14141B ── MainPage, GameView backdrop
-├─ SurfacePanelBrush #1C1C25 ── Rail, FlyoutPresenter keys, cards
-├─ SurfaceRaisedBrush ? pending ── RoomCardTemplate, ChoiceChipTemplate
-├─ LineBrush #FFFFFF0C ── dividers, card strokes
-├─ InkBrush / MutedBrush ── type styles
-├─ AcidBrush #DFED8C   cue: + bold label (nav) · + dot (step) · + check (swatch)
-│  └─ NavItem.Selected, StepCell.On, Swatch.Selected, Primary button
-├─ OnAcidBrush #14141B ── Primary button text, StepCell dot
-├─ Motion.Fast Duration 0:0:0.12 · ExponentialEase EaseOut  reduced: instant
-├─ Type.Display  ms-appx:///Assets/Fonts/BarlowCondensed_SemiBold.ttf#Barlow Condensed SemiBold
-├─ Type.Body     ms-appx:///Assets/Fonts/DMSans_Regular.ttf#DM Sans · DMSans_Bold.ttf#DM Sans Bold
-└─ Type.Eyebrow  ms-appx:///Assets/Fonts/SpaceGrotesk_Medium.ttf#Space Grotesk Medium
-StudioPage.Resources @studio: StepCellTemplate, SongCardTemplate
-WardrobePage.Resources @wardrobe: SwatchTemplate, ChoiceChipTemplate
-RoomsPage.Resources @rooms: RoomCardTemplate
+App.xaml @App (dark only → StaticResource)
+├─ Surface{Base,Panel,Raised?}Brush ── MainPage, Rail, Chat, FlyoutPresenter/ContentDialog keys, card templates
+├─ LineBrush ── dividers, card strokes
+├─ InkBrush · MutedBrush ── Type.xaml styles
+├─ AcidBrush  cue: + bold label | + dot | + check | + glyph swap
+│  └─ NavItem.Selected · StepCell.On · Swatch.Selected · Primary button · focus
+├─ OnAcidBrush ── Primary text, StepCell dot
+├─ ChatColor0..7 ── ChatLineTemplate name block (+ name text, so colour is never the only cue)
+├─ Motion.Fast 0:0:0.12 ExponentialEase EaseOut  reduced: instant
+└─ Fonts: BarlowCondensed_SemiBold · DMSans_Regular · DMSans_Bold · SpaceGrotesk_Medium (ms-appx, R6)
+Themes/Templates.xaml @App: ItemCard · SongCard · RoomCard · PersonRow · ChatLine
+<Panel>Page.Resources @route: panel-only templates
 ```
 
 ### Spec gate
 
 | Check | Result | Nodes | Resolution |
 |---|---|---|---|
-| Registration | PASS | all five views | RoomsPage takes `RoomFilter` via DataViewMap |
-| Region host | PASS | Main, panels | `!` routes need no named region |
-| Shell safety | PASS | Shell | no Region.Attached in Shell |
-| Cross-page links | PASS | Studio→stage | stage stays JS; `panel.open stage` after `-` |
-| Back stack | PASS | Rooms→CreateRoom | `-` twice on success |
-| Sources | PASS | every bound node | all in data-flow graph |
-| Feed vs state | PASS | Filter, Query, Draft, Pose | user-editable → IState |
-| Single writer | PASS (with precedence) | Studio Draft | XAML is the writer while open; game echoes ignored |
-| FeedView states | PASS | Hud, Rooms, Preview, Songs | table above; Lanes n/a (derived from local state) |
-| Failure paths | PASS | every intent | InfoBar + timeout |
-| Data shape | PASS | RoomEntry | covers public/mine/shared, door, owner, count |
+| Registration | PASS | 38 routes + Main | each has a ViewMap/DataViewMap with the data type in the inventory |
+| Region host | PASS | all `!` routes | no named regions needed; in-page tabs are inline Visibility regions |
+| Shell safety | PASS | Shell | no Region.Attached |
+| Cross-page links | PASS | room-initiated routes | `OpenRequest` carries route + data |
+| Back stack | PASS | Rooms→CreateRoom, Studio→Stage | stated in the route tree |
+| Sources | PASS | MainPage nodes | all in the data-flow graph; per-panel trees checked per wave |
+| Feed vs state | PASS | drafts | editable → IState; everything else IFeed |
+| Single writer | PASS | game state, studio draft | JS Game serializes; studio precedence stated |
+| FeedView states | PASS | table above | applies to every panel; per-panel None copy taken from today's JS |
+| Failure paths | PASS | every Dispatch | InfoBar with the game's message |
+| Data shape | PASS | GameState records | mirror `validate()`; parsing tested against a captured save |
 | Tokens | **FAIL** | SurfaceRaisedBrush | `? pending` → Unresolved Questions |
-| Theme-awareness | PASS | all brushes | dark-only app; StaticResource |
-| Scope | PASS | templates | page scoped |
-| Color cue | PASS | nav, step, swatch, mute | second cue named |
+| Theme-awareness | PASS | all | dark only |
+| Scope | PASS | templates | shared in Templates.xaml, others page-scoped |
+| Color cue | PASS | nav, steps, swatches, chat names | second cue named |
 | Contrast | PASS | Acid/OnAcid, Muted | text-safe |
-| Encodings | n/a | — | no value-scaled visuals |
-| Motion | PASS | preview fade, drawer | reduced fallback named; drawer depends on R5 |
-| Type assets | **FAIL** | four font files | not in repo yet; WASM `ms-appx` font path unverified (R6) → Unresolved Questions |
+| Encodings | PASS | XP meter | width = (xp − lower)/(upper − lower), clamped 0..1, computed in `Hud` |
+| Motion | PASS | fades, drawer | reduced fallback named (drawer depends on R5) |
+| Type assets | **FAIL** | four fonts | not in repo yet; WASM `ms-appx` fonts unverified (R6) → Unresolved Questions |
 | UnoFeatures | PASS | Hosting, MVUX, Navigation, Toolkit | listed |
-| Targets | PASS | bridge | WASM only; desktop path named in D2 |
+| Targets | PASS | islands | WASM only by decision |
 | Pending | PASS | SurfaceRaisedBrush | marked |
-| Capabilities | PASS | 3 substituted/omitted groups | repeated in Unresolved Questions |
+| Capabilities | PASS | substituted/omitted/deferred rows | repeated in Unresolved Questions |
 
 ---
 
 ## Implementation Plan
 
-0. **Spikes** (each time-boxed; failures go to the Debug Checkpoint): R1 bridge, R2 flyout over iframe,
-   R3 audio activation, R6 fonts, R7 build/payload. Throwaway branch, results recorded here.
-1. **Game hosted mode:** `dist/host-bridge.js` + `?host=uno` CSS/JS hooks + `tests/test-host-bridge.cjs`.
-   `npm test`. Commit `feat: add host bridge and hosted mode to the game client`.
-2. **XAML foundation:** UnoFeatures, `IHostBuilder` + `UseToolkitNavigation`, Shell, `IGameBridge`/`HostInterop`,
-   tokens, fonts, MainPage with WebView + top bar + rail + bottom bar. `npm run build:uno`, Playwright boot check.
-   Commit.
-3. **Room browser** (Rooms + CreateRoom), solo and shared. Verify flows 2–3. Commit.
-4. **Wardrobe.** Verify flow 4, reload persistence. Commit.
-5. **Studio** (editor, playhead, library). Verify flow 5. Commit.
-6. **Docs and checks:** README Uno section, RELEASE-NOTES, `verify-uno.mjs` checks `host-bridge.js`, new screenshots. Commit.
+**Wave 0: prototype and spikes (go/no-go before wave 1).** On a scratch branch, host `game/index.html`'s
+body in a `BrowserHtmlElement` with scoped CSS, push one state event to C#, open one XAML flyout over the
+room, and play audio from a XAML button. Spikes R1–R4, R6, R7. Results get recorded in this spec.
+If R1 fails, fall back to the WebView with the v1 bridge design from git history (`3ae79a3`).
+
+**Wave 1: foundation.** UnoFeatures, hosting, navigation, `GameHost` + `host.js`, the four `Js*`
+implementations, tokens, fonts, templates, and the full MainPage (top bar, rail, heading, action bar, editor
+bar, now playing, chat). Delete the WebView, `AfterhoursInterop.js` and `test-uno-bridge.cjs`. Add
+`Afterhours.Uno.Tests`.
+
+**Waves 2–7:** one wave per row group in the panel inventory. Each wave: XAML routes + models, delete the
+replaced JS panel code, forward its JS entry points to `open` requests, then tests + Playwright + commit.
+
+**Wave 8: docs.** README Uno section, RELEASE-NOTES, PLAYTEST-SETUP (re-run the five-player acceptance on the
+XAML build), screenshots. Then write the Phase B spec.
+
+Each wave is one or more conventional commits on its own branch, merged only with CI green.
 
 ## Quality Gates
 
 | Phase | Gate (skill) | Done when |
 |---|---|---|
-| 1–6 | Build + tests | `npm test` green; `npm run build:uno` 0 warnings; CI `validate.yml` green |
-| 2–5 | `uno-verify` (Playwright on WASM; App MCP n/a for this head) | each touched flow exercised at 4 widths, screenshots saved |
-| 3–5 | `uno-component-states` | Progress/None/Error exist per table; Retry proven by killing the bridge |
-| 2–5 | `uno-build-log` | entry per milestone in `docs/fleet/BUILD-LOG.md` |
-| 5 | `uno-completeness-audit` scoped to the four surfaces | report lists gaps with evidence |
-| 6 | `uno-break-it`, then `gold-standard-pass`, then `uno-audit` | findings fixed or listed below |
+| every wave | Build + tests | `npm test` green; `npm run build:uno` 0 warnings; xUnit green; CI green |
+| waves 1–7 | `uno-verify` (Playwright on WASM; App MCP n/a for this head) | every touched route exercised at 4 widths, solo and shared |
+| waves 2–7 | `uno-component-states` | Progress/None/Error per the table; Retry proven by failing the store |
+| waves 1–7 | `uno-build-log` | entry per wave in `docs/fleet/BUILD-LOG.md` |
+| end of each wave | `uno-completeness-audit` scoped to that wave's routes | gaps listed with evidence |
+| wave 8 | `uno-break-it`, then `gold-standard-pass`, then `uno-audit` | findings fixed or listed here |
 | any "ready to demo" claim | full `uno-completeness-audit` → `docs/COMPLETENESS.md` | report saved |
+| wave 8 | playtest acceptance (`PLAYTEST-SETUP.md`) | five-player session passes on the XAML build |
 
 ## Risks
 
-- **R1 API:** JS→C# through `[JSExport]` called by the frame via `parent`. Proven on .NET 10 WASM, unproven in
-  this app's published bundle. Spike 15 min: one round trip in `release/uno`.
-- **R2 Layout:** XAML flyout over the iframe: z-order, pointer capture after the iframe had focus, light dismiss
-  when clicking the room. Spike 15 min.
-- **R3 Audio:** the frame's AudioContext may refuse to start after a click in the parent document. Chrome
-  propagates user activation up to ancestors, never down to child frames. Mitigations to test: iframe
-  `allow="autoplay"` set by the interop shim before navigation; resume on the frame's first pointer event.
-  Spike 15 min in Chromium, plus a manual Safari check.
-- **R4 Focus:** returning keyboard focus to the iframe after a flyout closes (`GameView.Focus` vs
-  `iframe.contentWindow.focus()` via the shim). Spike 10 min.
-- **R5 Motion:** the Toolkit drawer has no reduced-motion switch. The fallback is a plain `Flyout` presenter with
-  no transition when `prefers-reduced-motion` matches.
-- **R6 Fonts/text:** `ms-appx` font URIs and `TextBlock.CharacterSpacing` on the WASM DOM renderer. Spike 10 min.
-  The Fonts.css comment says base64 `@font-face` avoids late text reflow.
-- **R7 Build:** Extensions + Toolkit size and time on WASM, and the `--in-process` task-host path on the Windows
-  host. Measure the bundle before and after.
-- **R8 Compatibility shim:** `AfterhoursInterop.js` wraps internal `unoExports` for the 6.7.135 ID mismatch. It
-  stays as is; D2 avoids adding more internal dependencies.
+- **R1 Hosting:** `BrowserHtmlElement` on the **native** renderer in Uno 6.7.135, its size and layout, and
+  whether 15 classic scripts load into it with Uno's `require.js` present. None of the game files check
+  `define.amd`. Spike 15 min.
+- **R2 Overlay:** XAML flyouts over the hosted canvas: pointer capture, light dismiss when clicking the room,
+  `<dialog>` top-layer behaviour for JS panels not yet migrated (they cover the XAML while open). Spike 15 min.
+- **R3 CSS scope:** the esbuild nesting transform on `style.css`/`game.css`/`room-view.css`/`wardrobe.css`, and
+  that Uno's DOM is untouched (`*{box-sizing}`, `button{}`, `dialog{}`). Spike 15 min, then `test-scope-css.mjs`.
+- **R4 Keys and focus:** window key handlers (`app.js` ×4, `arcade.js`) must ignore XAML inputs. Uno's TextBox
+  renders `<input>`, so the existing `matches('input')` guards help but don't cover XAML buttons or lists.
+  Spike 10 min.
+- **R5 Motion:** the Toolkit drawer has no reduced-motion switch. Fallback: plain presenter.
+- **R6 Fonts/text:** `ms-appx` font URIs and `TextBlock.CharacterSpacing` on the WASM DOM renderer. The
+  `Fonts.css` note recommends base64 `@font-face`. Spike 10 min.
+- **R7 Size/build:** Extensions + Toolkit size and time on WASM; the `--in-process` task-host path on the
+  Windows build host. Measure before and after wave 1.
+- **R8 State volume:** pushing the full `game.state` JSON at up to 10/s. Measure the size of a large save and
+  the parse time in WASM. Fallback: push slices (`hud`, `items`, `songs`, `rooms`) on change.
+- **R9 Accounts:** the Turnstile widget inside a XAML dialog's `BrowserHtmlElement`, and Supabase
+  session/redirect flows driven from C#. Wave 7 is gated on a 15-min spike; if it fails, the account panels
+  stay JS dialogs.
+- **R10 File import:** `FileOpenPicker` on WASM for save restore. Fallback: a JS file input in a small island.
 
 ## Unresolved Questions
 
-- **New dependencies:** approve the `Hosting; MVUX; Navigation; Toolkit` UnoFeatures (D3)? The
-  alternative is MVVM + plain Frame.
-- **Chat sidebar, room heading and now-playing** stay in the WebView for this pass. Move chat later?
-- **Other panels** (profile, journal, arcade, stage, catalog, companion, room tools, help, friends, trade, chart,
-  away card) stay JS dialogs centred on the room area. Acceptable for this pass?
-- **Wardrobe preview is rendered by JS** (substituted). OK?
-- **Studio audio, playhead and WAV export stay in JS** (substituted). OK?
-- **Fonts:** add four OFL TTFs (DM Sans ×2, Barlow Condensed, Space Grotesk) to `Assets/Fonts`?
-- **SurfaceRaisedBrush:** take the card colour from the current CSS during the build (default), or set one now?
-- **Phone layout:** bottom TabBar below 700 px with full-screen bottom sheets. Is the phone a target for the playtest?
-- **Studio size:** right drawer up to 1040 px (spec), or a full-window page with the room hidden while composing?
-- **Spec location:** the root `SPEC.md` holds the shipped applause spec, so this one lives in `docs/specs/`. Keep it here?
+- **Server path:** the staged order is assumed: Phase A over JS state, Phase B with C# rules and shared test
+  cases, ASP.NET Core only past the five-player cap. Confirm?
+- **New dependencies:** the `Hosting; MVUX; Navigation; Toolkit` UnoFeatures, four OFL font files, and an
+  xUnit test project. Approve?
+- **Standalone build:** once a panel moves to XAML, its JS template code is deleted. `Afterhours.html` and
+  `npm start` (the solo HTML game) then lose that panel. Options:
+  (a) keep a frozen JS UI copy for the standalone download;
+  (b) retire the standalone HTML and make the published Uno app the only client;
+  (c) keep the JS panels and maintain both.
+  Recommendation: (b). Solo play survives inside the Uno app.
+- **Substituted:** wardrobe preview tinting, synth/playhead/WAV export and arcade rounds stay JS behind
+  interfaces. OK?
+- **Omitted:** speech bubbles, arrival cues and the room intro card stay drawn on the canvas. OK?
+- **Account panels** (wave 7) depend on R9; they stay JS dialogs if the spike fails. OK?
+- **SurfaceRaisedBrush:** take it from the current card CSS in wave 1 (default)?
+- **Phone layout:** bottom tab bar and full-screen flyouts below 700 px. Is the phone a playtest target?
+- **Wave order:** catalog/inventory → studio/stage → wardrobe/profile/journal → rooms/room tools/companion/arcade →
+  social → accounts. Change anything?
+- **Spec location:** the root `SPEC.md` holds the shipped applause spec, so this one stays in `docs/specs/`. OK?

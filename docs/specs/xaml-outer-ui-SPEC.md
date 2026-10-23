@@ -1,6 +1,6 @@
 # Spec: Afterhours UI in Uno XAML around a JavaScript room
 
-Status: **draft v2, awaiting the Unresolved Questions.** Rewritten 2026-10-23 after the migration-scope review.
+Status: **draft v2; wave 0 done (go), wave 1 awaiting the Unresolved Questions.** Rewritten 2026-10-23 after the migration-scope review.
 No app code changed yet.
 
 ## Settled inputs
@@ -72,10 +72,10 @@ Reason: the store pushes async state with real Progress/Error cases. Each panel 
 online session. Panels open as flyouts or dialogs over `MainPage`.
 Tradeoff: Uno.Extensions + Toolkit add download size and build time (R7).
 
-**D5. Scope game CSS under `.ah-root` at build time with esbuild (already a devDependency).**
-`scripts/build-uno.mjs` wraps each game stylesheet in `.ah-root{…}`. It rewrites `:root`, `html` and `body` to
-`&`, hoists `@import`, `@font-face` and `@keyframes` to the top level, and lets esbuild lower the nesting.
-The JS writes its `body` classes (`is-playing`, `chat-history-open`, `music-panel-open`) to the root
+**D5. Scope game CSS under `.ah-root` at build time.**
+`scripts/scope-css.mjs` (no dependency, built in wave 0) prefixes every selector with `.ah-root`, turns
+`:root`, `html` and `body` into the root itself, recurses into `@media`/`@supports`, and hoists `@import`,
+`@font-face` and `@keyframes`. `scripts/build-uno.mjs` writes the result to `game/scoped.css`. The JS writes its `body` classes (`is-playing`, `chat-history-open`, `music-panel-open`) to the root
 element instead. `npm start` keeps loading the unscoped files.
 Tradeoff: a build transform to test. Unscoped `*{box-sizing}`, `button{}`, `input{}` and `dialog{}` rules
 would otherwise restyle Uno's own DOM.
@@ -93,7 +93,7 @@ board, set complete, the doorbell) send `open {route, data}` through `IRoomView.
 
 ```
 App.xaml.cs  UseToolkitNavigation · RegisterRoutes · NavigateAsync<Shell>
-Shell (UserControl, ContentControl host; no Region.Attached)
+Shell (UserControl, plain ContentControl host; no ExtendedSplashScreen, see wave 0; no Region.Attached)
 └─ MainPage   Grid[Region.Attached]        rows: TopBar | Body ; Body columns: Rail | Stage | Social
    ├─ TopBar     brand · Music · Furniture shop · coins · profile MenuFlyout
    ├─ Rail       nav · room hopping · resident card          Wide+: 220 px · Normal: 72 px icons · Narrow: hidden
@@ -113,10 +113,12 @@ Shell (UserControl, ContentControl host; no Region.Attached)
 | `IMusic` | `JsMusic` | same | `IFeed<Playback> Playback` (running, songId, step); `Play(SongDraft)`, `Stop`, `ExportWav(SongDraft)` (download handled in JS) |
 | `GameHost` (static partial) | — | — | the only `[JSImport]`/`[JSExport]` surface; module `game/host.js` via `JSHost.ImportAsync` |
 
-`game/host.js` (new, ES module) loads the classic game scripts in today's `index.html` order, builds the room
-markup inside the mounted element, and exposes the JS half of the four interfaces. It pushes `state`
-(the full validated `game.state`, throttled to 10/s), `shared`, `room`, `editor`, `chat`, `playback` and
-`open`. The `world` facade it calls is today's `window.AfterhoursWorld`, extended where needed.
+`game/host.js` (ES module, prototyped in wave 0) loads the classic game scripts in today's `index.html` order,
+builds the room markup inside the mounted element, sets `window.AfterhoursBase` so game art resolves under
+`game/`, and exposes the JS half of the four interfaces. It pushes **state slices** (`profile`, `wallet`,
+`items`, `rooms`, `songs`, `draft`, `pet`, `progress`, …: the top-level keys of `game.state`), sending only the
+slices whose JSON changed, at most 10/s. It also pushes `shared`, `room`, `editor`, `chat`, `playback` and
+`open`. Wave 0 measured a full 212 KB save at 20–42 ms per C# parse, which is too slow to send whole (R8). The `world` facade it calls is today's `window.AfterhoursWorld`, extended where needed.
 `BridgeJsonContext` (`System.Text.Json` source generation) keeps parsing trimming-safe.
 
 ### Routes
@@ -221,7 +223,8 @@ chat column) and the four interfaces.
 
 - `npm test` stays green after every wave. New tests:
   - `tests/test-host.cjs`: host.js script order, mount into a given element, event throttling, `open` requests.
-  - `tests/test-scope-css.mjs`: no unscoped selector in the scoped output; keyframes and font-face hoisted.
+  - `tests/test-scope-css.mjs`: no unscoped selector in the scoped output; keyframes and font-face hoisted
+    (wave 0 proved it in the browser: no rule in `scoped.css` matches any Uno element).
 - **C# tests:** a new `uno/Afterhours.Uno.Tests` (xUnit, `net10.0`) for record parsing (`BridgeJsonContext`
   against a captured `game.state`), model filtering (rooms, shop) and the studio undo stack. Phase B adds
   the vector runner here.
@@ -455,12 +458,46 @@ Themes/Templates.xaml @App: ItemCard · SongCard · RoomCard · PersonRow · Cha
 
 ---
 
+## Wave 0 results (2026-10-23)
+
+**Verdict: go for wave 1.** Same-page hosting works on Uno 6.7.135's native WebAssembly renderer. The WebView
+fallback is not needed. Evidence: `docs/spikes/wave0/` (screenshots, `results.json`, the 212 KB max save),
+produced by `scripts/spike-wave0.mjs` in Chromium with `--autoplay-policy=user-gesture-required` against a
+trimmed Release publish.
+
+| Check | Result | Measured |
+|---|---|---|
+| R1 hosting | PASS | 15 classic game scripts load into a `BrowserHtmlElement` beside Uno's `require.js`; ready in ~5 s cold; no page errors |
+| R1 round trip | PASS | XAML button → `[JSImport] dispatch('checkin')` → JS game → state event → `[JSImport]` callback → XAML text: 240 → 275 ✦ |
+| R2 overlay | PASS | plain XAML `Flyout` and a Navigation `!SpikePanel` page both draw over the live canvas, take clicks, light-dismiss, Esc closes; translucent acrylic blends over the canvas |
+| R2 JS dialogs | PASS | unmigrated `<dialog>` panels still open and close from the hosted game |
+| R3 CSS scope | PASS | no rule in `game/scoped.css` matches any element outside `.ah-root` |
+| R4 keys | PASS | typing `wasd` and arrows into a XAML `TextBox` leaves the avatar still; after clicking the room, arrows walk |
+| Audio | PASS | a click on a XAML button starts the game's `AudioContext` (`running`) under the real autoplay policy |
+| R6 fonts | PASS | `ms-appx:///Assets/Fonts/DMSans_Regular.ttf#DM Sans` loads (Uno registers it under a generated family name); `CharacterSpacing="150"` renders as `letter-spacing: 2.7px` at 18 px |
+| R7 size | measured | `_framework` brotli 5.53 MB → **6.49 MB (+0.96 MB, +17%)** with `Hosting; Toolkit; MVUX; Navigation`; cold Release build 159 s (baseline 187 s on a colder cache); Windows `--in-process` path not checked here |
+| R7 warnings | **new** | 17 × IL2026 + 3 × IL2104 trim warnings, from Uno.Extensions Navigation/Toolkit and MVUX-generated view models (hot-reload patching, `dynamic`). The trimmed app runs every check correctly |
+| R8 state volume | **FAIL as designed** | fresh save 2.2 KB parses in 2.5–3.9 ms; the max save (212 KB) takes **20–42 ms** per `JsonDocument.Parse` on the UI thread → push changed slices instead (Services section updated) |
+| Art | fixed in spike | game art loaded by relative path 404'd in the Uno page; `window.AfterhoursBase` now prefixes every JS asset path (standalone packager still embeds all 18 images) |
+
+**Workarounds found** (each marked in code; candidates for the uno-scaffolding runtime gotchas):
+
+- `WORKAROUND(BrowserHtmlElement inherits pointer-events none on the native renderer)`: Uno 6.7.135 sets
+  `pointer-events: none` on the hosting `ContentControl`/`ContentPresenter`, which the hosted `<div>`
+  inherits, so the canvas never receives clicks. `InputPolicy = NativeOnly` does not change this on the
+  native renderer. Fix: `SetCssStyle(("pointer-events", "auto"))` on the element (`Interop/RoomHost.cs`).
+- Toolkit `ExtendedSplashScreen` requests a lowercase `appmanifest.js` on WebAssembly. The project ships
+  `AppManifest.js`, so case-sensitive hosts (the Node server, Cloudflare) return 404. The Shell uses a plain
+  `ContentControl`, and `MainPage` keeps its own loading panel.
+- Build: publishing over an existing `release/uno` kept the previous `dotnet.*.js` in the new package's
+  `uno-config.js`, so a rebuilt app silently served the old assembly. `build-uno.mjs` now empties the folder
+  first (commit `eafc1f9`).
+
 ## Implementation Plan
 
-**Wave 0: prototype and spikes (go/no-go before wave 1).** On a scratch branch, host `game/index.html`'s
-body in a `BrowserHtmlElement` with scoped CSS, push one state event to C#, open one XAML flyout over the
-room, and play audio from a XAML button. Spikes R1–R4, R6, R7. Results get recorded in this spec.
-If R1 fails, fall back to the WebView with the v1 bridge design from git history (`3ae79a3`).
+**Wave 0: prototype and spikes. Done 2026-10-23, verdict go** (see Wave 0 results). The spike code
+(`MainPage` spike bar, `SpikePanel` route) is replaced in wave 1; `host.js`, `scope-css.mjs`, `RoomHost`,
+`GameHost` and the asset base carry forward.
 
 **Wave 1: foundation.** UnoFeatures, hosting, navigation, `GameHost` + `host.js`, the four `Js*`
 implementations, tokens, fonts, templates, and the full MainPage (top bar, rail, heading, action bar, editor
@@ -479,7 +516,7 @@ Each wave is one or more conventional commits on its own branch, merged only wit
 
 | Phase | Gate (skill) | Done when |
 |---|---|---|
-| every wave | Build + tests | `npm test` green; `npm run build:uno` 0 warnings; xUnit green; CI green |
+| every wave | Build + tests | `npm test` green; `npm run build:uno` with no warnings beyond the 20 recorded Extensions/MVUX trim warnings (pending decision); xUnit green; CI green |
 | waves 1–7 | `uno-verify` (Playwright on WASM; App MCP n/a for this head) | every touched route exercised at 4 widths, solo and shared |
 | waves 2–7 | `uno-component-states` | Progress/None/Error per the table; Retry proven by failing the store |
 | waves 1–7 | `uno-build-log` | entry per wave in `docs/fleet/BUILD-LOG.md` |
@@ -490,23 +527,18 @@ Each wave is one or more conventional commits on its own branch, merged only wit
 
 ## Risks
 
-- **R1 Hosting:** `BrowserHtmlElement` on the **native** renderer in Uno 6.7.135, its size and layout, and
-  whether 15 classic scripts load into it with Uno's `require.js` present. None of the game files check
-  `define.amd`. Spike 15 min.
-- **R2 Overlay:** XAML flyouts over the hosted canvas: pointer capture, light dismiss when clicking the room,
-  `<dialog>` top-layer behaviour for JS panels not yet migrated (they cover the XAML while open). Spike 15 min.
-- **R3 CSS scope:** the esbuild nesting transform on `style.css`/`game.css`/`room-view.css`/`wardrobe.css`, and
-  that Uno's DOM is untouched (`*{box-sizing}`, `button{}`, `dialog{}`). Spike 15 min, then `test-scope-css.mjs`.
-- **R4 Keys and focus:** window key handlers (`app.js` ×4, `arcade.js`) must ignore XAML inputs. Uno's TextBox
-  renders `<input>`, so the existing `matches('input')` guards help but don't cover XAML buttons or lists.
-  Spike 10 min.
+- **R1 Hosting:** resolved in wave 0 (pointer-events workaround).
+- **R2 Overlay:** resolved in wave 0. Open item: a JS `<dialog>` uses the browser top layer, so while one is
+  open it covers the XAML too. Acceptable while panels migrate.
+- **R3 CSS scope:** resolved in wave 0. Wave 1 adds `tests/test-scope-css.mjs` to keep it that way.
+- **R4 Keys and focus:** resolved for `TextBox` in wave 0. Still to check in wave 1: a focused XAML button or
+  list must not swallow or leak room keys.
 - **R5 Motion:** the Toolkit drawer has no reduced-motion switch. Fallback: plain presenter.
-- **R6 Fonts/text:** `ms-appx` font URIs and `TextBlock.CharacterSpacing` on the WASM DOM renderer. The
-  `Fonts.css` note recommends base64 `@font-face`. Spike 10 min.
-- **R7 Size/build:** Extensions + Toolkit size and time on WASM; the `--in-process` task-host path on the
-  Windows build host. Measure before and after wave 1.
-- **R8 State volume:** pushing the full `game.state` JSON at up to 10/s. Measure the size of a large save and
-  the parse time in WASM. Fallback: push slices (`hud`, `items`, `songs`, `rooms`) on change.
+- **R6 Fonts/text:** resolved in wave 0 for DM Sans; repeat the check for the other three files in wave 1.
+- **R7 Size/build:** measured (+0.96 MB brotli, build time flat). Open: 20 trim warnings from Uno.Extensions/MVUX
+  (see Unresolved Questions) and the Windows `--in-process` path.
+- **R8 State volume:** full-state push measured too slow at max save size. Wave 1 pushes changed slices and
+  re-measures the max save; target under 8 ms per push on the UI thread.
 - **R9 Accounts:** the Turnstile widget inside a XAML dialog's `BrowserHtmlElement`, and Supabase
   session/redirect flows driven from C#. Wave 7 is gated on a 15-min spike; if it fails, the account panels
   stay JS dialogs.
@@ -516,8 +548,11 @@ Each wave is one or more conventional commits on its own branch, merged only wit
 
 - **Server path:** the staged order is assumed: Phase A over JS state, Phase B with C# rules and shared test
   cases, ASP.NET Core only past the five-player cap. Confirm?
-- **New dependencies:** the `Hosting; MVUX; Navigation; Toolkit` UnoFeatures, four OFL font files, and an
-  xUnit test project. Approve?
+- **New dependencies:** the `Hosting; MVUX; Navigation; Toolkit` UnoFeatures (+0.96 MB brotli, measured in
+  wave 0), four OFL font files, and an xUnit test project. Approve?
+- **Trim warnings:** those features add 17 × IL2026 + 3 × IL2104 from Uno.Extensions/MVUX code the app doesn't
+  own. Options: (a) gate on "no warnings beyond this recorded set" (recommended); (b) suppress IL2026/IL2104
+  project-wide, which would also hide future warnings in our own code; (c) drop MVUX/Navigation for MVVM.
 - **Standalone build:** once a panel moves to XAML, its JS template code is deleted. `Afterhours.html` and
   `npm start` (the solo HTML game) then lose that panel. Options:
   (a) keep a frozen JS UI copy for the standalone download;

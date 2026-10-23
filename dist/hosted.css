@@ -1,4 +1,4 @@
-/* Loaded only by host.js: the Uno app draws this chrome in XAML, so the game shows just the scene. */
+/* Loaded only by host.mjs: the Uno app draws this chrome in XAML, so the game shows just the scene. */
 .ah-root.ah-hosted .topbar,.ah-root.ah-hosted .rail,.ah-root.ah-hosted .room-heading,.ah-root.ah-hosted .room-journey,
 .ah-root.ah-hosted .action-bar,.ah-root.ah-hosted .room-composer,.ah-root.ah-hosted .now-playing,.ah-root.ah-hosted .social,
 .ah-root.ah-hosted footer,.ah-root.ah-hosted #roomEditor{display:none!important}

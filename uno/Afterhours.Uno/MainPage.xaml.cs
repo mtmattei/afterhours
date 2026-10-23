@@ -21,7 +21,7 @@ public sealed partial class MainPage : Page
             return;
         try
         {
-            var url = global::Uno.Foundation.WebAssemblyRuntime.InvokeJS("new URL('game/host.js', document.baseURI).href");
+            var url = global::Uno.Foundation.WebAssemblyRuntime.InvokeJS("new URL('game/host.mjs', document.baseURI).href");
             await GameHost.ImportAsync(url);
             await GameHost.Mount(Room.Element.ElementId, OnGameEvent);
         }
@@ -57,18 +57,15 @@ public sealed partial class MainPage : Page
     {
         if (!OperatingSystem.IsBrowser())
             return;
-        using var reply = JsonDocument.Parse(GameHost.Dispatch("checkin", "{}"));
-        SpikeStatus.Text = reply.RootElement.GetProperty("ok").GetBoolean()
-            ? "Gift claimed"
-            : reply.RootElement.GetProperty("error").GetString();
+        SpikeStatus.Text = GameHost.Invoke("daily") ? "Gift claimed" : "Gift unavailable";
     }
 
     private async void Play_Click(object sender, RoutedEventArgs e)
     {
         if (!OperatingSystem.IsBrowser())
             return;
-        await GameHost.PlayDraft();
-        SpikeStatus.Text = "Playing";
+        SpikeStatus.Text = GameHost.Invoke("play") ? "Playing" : "Music unavailable";
+        await Task.CompletedTask;
     }
 
     private void FlyoutAction_Click(object sender, RoutedEventArgs e) => SpikeStatus.Text = "Flyout clicks " + ++_flyoutClicks;

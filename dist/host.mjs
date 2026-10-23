@@ -35,7 +35,8 @@ export function hudFrom(s, G) {
     nextQuest: next ? next.name : 'The night is yours',
     nextQuestDetail: next ? `${Math.min(next.target, G.progress(s, next))} / ${next.target} · ${next.reward} credits`
       : 'Make a track. Build a room. Meet someone.',
-    dailyClaimed: s.lastCheckin === G.day(), chatColor: s.profile.chatColor
+    dailyClaimed: s.lastCheckin === G.day(), dailyLabel: s.lastCheckin === G.day() ? 'Checked in ✓' : 'Daily gift · 35 ✦',
+    chatColor: s.profile.chatColor
   };
 }
 
@@ -188,17 +189,6 @@ export function say(text, mode, target) {
   input.value = text;
   form.requestSubmit();
   return true;
-}
-
-export function dispatch(type, payloadJson) {
-  try {
-    world.saveWorld();
-    const result = world.game.dispatch(type, JSON.parse(payloadJson || '{}'));
-    world.sync();
-    return JSON.stringify({ ok: true, result: result ?? null });
-  } catch (e) {
-    return JSON.stringify({ ok: false, error: e.message });
-  }
 }
 
 export function focusRoom() { world.canvas.focus(); }

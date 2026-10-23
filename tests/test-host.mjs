@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {createRequire} from 'node:module';
-import {commands, diffSlices, hudFrom} from '../dist/host.js';
+import {chromeFrom, commands, diffSlices, hudFrom} from '../dist/host.mjs';
 
 const require = createRequire(import.meta.url);
 const G = require('../dist/game-core.js'), F = require('../dist/furniture.js');
@@ -47,4 +47,20 @@ test('hosted mode hides every piece of chrome the XAML replaces', async () => {
   const hidden = css.match(/([^{}]*)\{display:none!important\}/)[1];
   for (const part of ['.topbar', '.rail', '.room-heading', '.room-journey', '.action-bar', '.room-composer', '.now-playing', '.social', 'footer', '#roomEditor'])
     assert.ok(hidden.includes('.ah-root.ah-hosted ' + part), part + ' is not hidden');
+});
+
+// tests/fixtures/host-events.json is also parsed by the C# tests (Afterhours.Uno.Tests), so it must match
+// what host.mjs really sends. Compare shapes (keys and value types), not values.
+const shape = v => Array.isArray(v) ? [v.length ? shape(v[0]) : null] : v && typeof v === 'object'
+  ? Object.fromEntries(Object.keys(v).sort().map(k => [k, shape(v[k])])) : typeof v;
+
+test('the shared event fixture matches what host.mjs produces', async () => {
+  const fixture = JSON.parse(await readFile(new URL('./fixtures/host-events.json', import.meta.url), 'utf8'));
+  const of = type => fixture.find(e => e.type === type);
+  assert.deepEqual(shape(of('hud').hud), shape(hudFrom(fresh().state, G)));
+  const el = {textContent: '1', disabled: false, hidden: false, classList: {contains: () => false}, style: {width: '0%'}};
+  globalThis.window = {AfterhoursOnline: {connected: () => false}};
+  const chrome = chromeFrom({querySelector: () => el}, {getScene: () => ({personal: false, roomIndex: 0}), roomKey: () => 'public:0'}, {classList: {contains: () => false}});
+  delete globalThis.window;
+  assert.deepEqual(shape(of('chrome').chrome), shape(chrome));
 });

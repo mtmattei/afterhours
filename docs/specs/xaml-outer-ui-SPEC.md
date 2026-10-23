@@ -111,9 +111,9 @@ Shell (UserControl, plain ContentControl host; no ExtendedSplashScreen, see wave
 | `ISharedWorld` | `JsSharedWorld` (wraps `online.js`) | `HttpSharedWorld` | `IFeed<SharedState> State` (None when solo); `Connect(JoinRequest)`, `Leave`, `JoinRoom(key)`, `Say`, `Whisper`, `Friend`, `Trade*`, `Vote`, `Queue`, `Report`, `AwaySeen` |
 | `IRoomView` | `JsRoomView` | same | `Mount(elementId)`, `IFeed<RoomInfo> Room`, `IFeed<EditorState> Editor`, `IListFeed<ChatLine> Chat`, `IAsyncEnumerable<OpenRequest> Requests`; `Enter(RoomKey)`, `Wave`, `Dance`, `Stand`, `StartEditing`/`Rotate`/`Store`/`Undo`/`Finish`/`Select(itemId)`, `Zoom(in/out/fit/follow)`, `Say(text, mode)`, `Focus()` |
 | `IMusic` | `JsMusic` | same | `IFeed<Playback> Playback` (running, songId, step); `Play(SongDraft)`, `Stop`, `ExportWav(SongDraft)` (download handled in JS) |
-| `GameHost` (static partial) | — | — | the only `[JSImport]`/`[JSExport]` surface; module `game/host.js` via `JSHost.ImportAsync` |
+| `GameHost` (static partial) | — | — | the only `[JSImport]`/`[JSExport]` surface; module `game/host.mjs` via `JSHost.ImportAsync` |
 
-`game/host.js` (ES module, prototyped in wave 0) loads the classic game scripts in today's `index.html` order,
+`game/host.mjs` (ES module, prototyped in wave 0) loads the classic game scripts in today's `index.html` order,
 builds the room markup inside the mounted element, sets `window.AfterhoursBase` so game art resolves under
 `game/`, and exposes the JS half of the four interfaces. It pushes **state slices** (`profile`, `wallet`,
 `items`, `rooms`, `songs`, `draft`, `pet`, `progress`, …: the top-level keys of `game.state`), sending only the
@@ -222,7 +222,7 @@ chat column) and the four interfaces.
 ### Testing and validation
 
 - `npm test` stays green after every wave. New tests:
-  - `tests/test-host.cjs`: host.js script order, mount into a given element, event throttling, `open` requests.
+  - `tests/test-host.cjs`: host.mjs script order, mount into a given element, event throttling, `open` requests.
   - `tests/test-scope-css.mjs`: no unscoped selector in the scoped output; keyframes and font-face hoisted
     (wave 0 proved it in the browser: no rule in `scoped.css` matches any Uno element).
 - **C# tests:** a new `uno/Afterhours.Uno.Tests` (xUnit, `net10.0`) for record parsing (`BridgeJsonContext`
@@ -232,7 +232,7 @@ chat column) and the four interfaces.
   390 px, one script per wave. Each script covers every route in that wave: open, change, commit, reload,
   confirm persisted. Solo and shared both run, using the two-tab check from `PLAYTEST-SETUP.md`. Screenshots
   go to `docs/screenshots/`.
-- `verify-uno.mjs` checks `game/host.js` and the scoped CSS in the publish output, and that no WebView
+- `verify-uno.mjs` checks `game/host.mjs` and the scoped CSS in the publish output, and that no WebView
   remains in the publish output.
 
 ### Capability inventory
@@ -290,7 +290,7 @@ chat column) and the four interfaces.
   shared by several panels (`ItemCardTemplate`, `SongCardTemplate`, `RoomCardTemplate`, `PersonRowTemplate`)
   live in `Themes/Templates.xaml`.
 - **Art in XAML:** furniture, room and avatar art come from `game/assets/*.webp` by URL. Furniture cards
-  crop atlas cells using the crop tables `host.js` exports (`furnitureCrops`, `newCrops`, collector JSON),
+  crop atlas cells using the crop tables `host.mjs` exports (`furnitureCrops`, `newCrops`, collector JSON),
   in a clipped container with a `TranslateTransform`. Avatars and portraits use PNGs that
   `IRoomView.RenderAvatar` returns.
 - **Adaptive** (`utu:ResponsiveLayout` app-wide: Narrow 700 / Normal 960 / Wide 1200 / Widest 1600, matching the CSS):
@@ -496,10 +496,10 @@ trimmed Release publish.
 ## Implementation Plan
 
 **Wave 0: prototype and spikes. Done 2026-10-23, verdict go** (see Wave 0 results). The spike code
-(`MainPage` spike bar, `SpikePanel` route) is replaced in wave 1; `host.js`, `scope-css.mjs`, `RoomHost`,
+(`MainPage` spike bar, `SpikePanel` route) is replaced in wave 1; `host.mjs`, `scope-css.mjs`, `RoomHost`,
 `GameHost` and the asset base carry forward.
 
-**Wave 1: foundation.** UnoFeatures, hosting, navigation, `GameHost` + `host.js`, the four `Js*`
+**Wave 1: foundation.** UnoFeatures, hosting, navigation, `GameHost` + `host.mjs`, the four `Js*`
 implementations, tokens, fonts, templates, and the full MainPage (top bar, rail, heading, action bar, editor
 bar, now playing, chat). Delete the WebView, `AfterhoursInterop.js` and `test-uno-bridge.cjs`. Add
 `Afterhours.Uno.Tests`.

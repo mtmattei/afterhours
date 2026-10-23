@@ -3,7 +3,7 @@ using System.Runtime.Versioning;
 
 namespace Afterhours.Uno.Interop;
 
-// The only C# that calls the game's JavaScript. Functions live in game/host.js.
+// The only C# that calls the game's JavaScript. Functions live in game/host.mjs.
 [SupportedOSPlatform("browser")]
 internal static partial class GameHost
 {
@@ -14,14 +14,14 @@ internal static partial class GameHost
     [JSImport("mount", Module)]
     public static partial Task Mount(string elementId, [JSMarshalAs<JSType.Function<JSType.String>>] Action<string> onEvent);
 
-    [JSImport("dispatch", Module)]
-    public static partial string Dispatch(string type, string payloadJson);
+    [JSImport("invoke", Module)]
+    public static partial bool Invoke(string command);
 
-    [JSImport("playDraft", Module)]
-    public static partial Task PlayDraft();
+    [JSImport("travel", Module)]
+    public static partial bool Travel(int index);
 
-    [JSImport("stopMusic", Module)]
-    public static partial void StopMusic();
+    [JSImport("say", Module)]
+    public static partial bool Say(string text, string mode, string target);
 
     [JSImport("focusRoom", Module)]
     public static partial void FocusRoom();

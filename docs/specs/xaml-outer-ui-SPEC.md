@@ -1,6 +1,6 @@
 # Spec: Afterhours UI in Uno XAML around a JavaScript room
 
-Status: **draft v2; wave 0 done (go), wave 1 awaiting the Unresolved Questions.** Rewritten 2026-10-23 after the migration-scope review.
+Status: **draft v2; waves 0 and 1 done, wave 2 next.** Rewritten 2026-10-23 after the migration-scope review.
 No app code changed yet.
 
 ## Settled inputs
@@ -241,7 +241,8 @@ chat column) and the four interfaces.
 |---|---|---|
 | Menus, HUD, rail, room hopping, resident card | implemented | XAML (wave 1) |
 | Room heading, action bar (wave, dance, stand, dock), now playing | implemented | XAML (wave 1) |
-| Room-editor toolbar, zoom/fit/follow | implemented | XAML → `IRoomView` (wave 1) |
+| Room-editor toolbar | implemented | XAML → `IRoomView` (wave 1) |
+| Zoom/fit/follow, sound toggle, seat status, toasts | **omitted** (stay JS) | scene overlays drawn over the canvas |
 | Chat column: room chat, shout/whisper modes, history | implemented | XAML ← `IRoomView.Chat` (wave 1) |
 | Speech bubbles, arrival cues, room intro card | **omitted** (stay JS) | drawn on the canvas |
 | The 35 panels in waves 2–6 of the inventory | implemented | XAML routes |
@@ -493,6 +494,36 @@ trimmed Release publish.
   `uno-config.js`, so a rebuilt app silently served the old assembly. `build-uno.mjs` now empties the folder
   first (commit `eafc1f9`).
 
+## Wave 1 results (2026-10-23)
+
+**Done: XAML chrome around the JavaScript room.** 30/30 runtime checks (`scripts/verify-wave1.mjs`,
+screenshots in `docs/screenshots/xaml/wave1/`) at 1440/1000/800/390 px, solo and two-player shared;
+72 Node tests and 9 xUnit tests pass; the publish passes the warning gate.
+
+What shipped: top bar (brand, shared-world status, shop, credits, portrait), rail (nav, room hopping with a
+current-room bar, resident card with XP and daily gift, help), room heading, the room in a `BrowserHtmlElement`,
+editor bar, action bar and dock, now playing, chat column / chat flyout with Say/Shout/Whisper, phone bottom
+bar, and a boot `FeedView` with reload on error. The WebView, `AfterhoursInterop.js` and its test are gone.
+
+Decisions made while building (they amend the briefs above):
+
+- **Strangler bridge.** `host.mjs` reports what the game's own chrome shows (HUD via game-core's rules, room,
+  editor, actions, now playing, chat, portrait) and runs XAML commands by clicking the game's own buttons
+  through an allowlist (`commands`). No game logic is repeated in C#. Later waves delete each JS piece as its
+  XAML replacement lands. An xUnit test checks every XAML `CommandParameter` against the allowlist.
+- **Interfaces on demand.** Wave 1 needed `IGameStore` (HUD, portrait, slices) and `IRoomView` (status, chrome,
+  chat, rooms, commands). `IMusic` arrives with the studio (wave 3) and `ISharedWorld` with rooms/social (waves 5–6).
+- **Scene overlays stay in the room.** Zoom/fit/follow, the sound toggle, the room intro card, seat status and
+  toasts are drawn over the canvas by the game and stay there (capability row updated).
+- **Shared templates later.** No template is shared yet, so `Themes/Templates.xaml` waits for wave 2.
+- **Fonts.** DM Sans Regular and Bold, Barlow Condensed ExtraBold (room titles, uppercase with an acid stop),
+  Space Grotesk Bold (brand), matching the CSS weights.
+- **Warning gate.** The approved "no warnings beyond the recorded set" is enforced by class, not count:
+  `scripts/uno-warnings.mjs` allows IL2026 from MVUX-generated view models and Uno.Extensions APIs and IL2104
+  from Uno assemblies (52 + 3 today; the count grows with each model). Any other warning fails `npm run build:uno`.
+- **Chat command shape.** `Send(text, mode, whisperTarget)`: `text` is the command parameter (Enter passes
+  `TextBox.Text`; the button passes it by `ElementName`), the other two resolve from MVUX states.
+
 ## Implementation Plan
 
 **Wave 0: prototype and spikes. Done 2026-10-23, verdict go** (see Wave 0 results). The spike code
@@ -542,6 +573,9 @@ Each wave is one or more conventional commits on its own branch, merged only wit
 - **R9 Accounts:** the Turnstile widget inside a XAML dialog's `BrowserHtmlElement`, and Supabase
   session/redirect flows driven from C#. Wave 7 is gated on a 15-min spike; if it fails, the account panels
   stay JS dialogs.
+- **R11 Screen readers on WASM native:** `AutomationProperties.Name` produced no `aria-label` in the Release
+  build (Uno 6.7.135), and Tab revealed no "Enable accessibility" element (the docs describe that flow for the
+  Skia renderer). Spike 15 min in wave 2; the names are already set in XAML so the fix is configuration.
 - **R10 File import:** `FileOpenPicker` on WASM for save restore. Fallback: a JS file input in a small island.
 
 ## Unresolved Questions

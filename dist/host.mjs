@@ -9,8 +9,8 @@ export const commands = Object.freeze({
   wave: '#wave', dance: '#dance', stand: '#standUp', decorate: '#decorate',
   rotate: '#rotateFurniture', store: '#storeFurniture', undo: '#undoFurniture', inventory: '#openInventory', finish: '#finishEditing',
   play: '#play', studio: '#studioOpen', look: '[data-view="look"]', home: '#travelHome',
-  profile: '#profile', help: '#help', rooms: '#allRooms', favorite: '#saveRoom', shop: '#quickCatalog',
-  journal: '#questsOpen', arcade: '#arcadeOpen', stage: '#stageOpen', catalog: '#catalogOpen', myRooms: '#myRoomsOpen',
+  profile: '#profile', help: '#help', rooms: '#allRooms', favorite: '#saveRoom',
+  journal: '#questsOpen', arcade: '#arcadeOpen', stage: '#stageOpen', myRooms: '#myRoomsOpen',
   companion: '#petOpen', roomTools: '#roomTools', daily: '#dailyClaim', friends: '#friendsTab', chatPrefs: '#socialSettings',
   shared: '#connectionLabel'
 });
@@ -145,6 +145,8 @@ export async function mount(elementId, onEvent) {
   root.classList.add('ah-root', 'ah-hosted');
   // Game scripts load art by relative path; resolve it against game/ instead of the Uno page.
   window.AfterhoursBase = base.href;
+  // Game code asks for the XAML panels (shop, blueprints, gift wrap…) through this hook.
+  window.AfterhoursHost = { open: (route, data = {}) => emit({ type: 'open', route, data }) };
 
   const styled = Promise.all([loadStyle('scoped.css'), loadStyle('hosted.css')]);
   const page = new DOMParser().parseFromString(await (await fetch(new URL('index.html', base))).text(), 'text/html');
@@ -161,7 +163,10 @@ export async function mount(elementId, onEvent) {
   world.spriteImage.addEventListener('load', schedule);
 
   emit({ type: 'ready', scripts: scripts.length, publicRooms: rooms.map((r, index) => ({ index, title: r.title, owner: r.owner, mood: r.mood, count: r.count, icon: r.icon, tag: r.tag })) });
+
   saved = true; flush();
+  // The shop sends atlas sizes, so it goes out once every furniture atlas has decoded.
+  Promise.all(world.shopImages().map(img => img.decode().catch(() => {}))).then(() => emit({ type: 'shop', shop: world.shopData() }));
 }
 
 // Runs a game command by clicking the element the game wired for it. Returns false if it is unavailable.
@@ -192,3 +197,13 @@ export function say(text, mode, target) {
 }
 
 export function focusRoom() { world.canvas.focus(); }
+
+// Writes. Each runs the game's own action and replies with {ok, error, result} as JSON.
+const reply = out => JSON.stringify({ ok: !!out?.ok, error: out?.error ?? null, result: out?.result ?? null });
+export function buy(type) { const out = world.act('buy', { type }, 'Added to your collection.'); return reply({ ...out, result: out.ok ? { id: out.result.id } : null }); }
+export async function place(id) { return reply({ ok: await world.placeItem(id) }); }
+export function use(id) { return reply(world.useItem(id)); }
+export function wrap(id, content, note) { return reply(world.wrapGift(id, content, note)); }
+export function saveBlueprint() { return reply(world.saveBlueprint()); }
+export function restoreBlueprint(id) { return reply(world.restoreBlueprint(id)); }
+export function playDisc(id) { return reply({ ok: world.playDisc(id) }); }

@@ -125,6 +125,188 @@
   }
  },
  {
+  "type": "slices",
+  "slices": {
+   "coins": 160,
+   "activeRoom": "home",
+   "items": [
+    {
+     "id": "starter-sofa",
+     "type": "sofa",
+     "x": 1,
+     "y": 5,
+     "rot": 1,
+     "placed": true,
+     "roomId": "home",
+     "state": true
+    },
+    {
+     "id": "starter-decks",
+     "type": "decks",
+     "x": 5,
+     "y": 1,
+     "rot": 0,
+     "placed": true,
+     "roomId": "home",
+     "state": true
+    },
+    {
+     "id": "starter-speaker",
+     "type": "speaker",
+     "x": 7,
+     "y": 1,
+     "rot": 0,
+     "placed": true,
+     "roomId": "home",
+     "state": true
+    },
+    {
+     "id": "bought-sofa",
+     "type": "sofa",
+     "x": 4,
+     "y": 6,
+     "rot": 0,
+     "placed": false,
+     "roomId": null,
+     "state": true
+    }
+   ],
+   "rooms": [
+    {
+     "id": "home",
+     "name": "Your afterhours",
+     "description": "A little place to call my own.",
+     "tags": "music, hangout",
+     "lighting": "amber",
+     "door": "open",
+     "notes": [],
+     "playlist": [],
+     "event": null
+    }
+   ],
+   "discs": [
+    {
+     "id": "disc-1",
+     "song": {
+      "id": "song-1",
+      "title": "Side B",
+      "bpm": 92,
+      "updated": 1792454400000
+     },
+     "artist": "daydream",
+     "date": 1792454400000
+    }
+   ],
+   "blueprints": [
+    {
+     "id": "bp-1",
+     "name": "Your afterhours",
+     "room": "home",
+     "items": [
+      {
+       "id": "starter-sofa",
+       "type": "sofa",
+       "x": 1,
+       "y": 5,
+       "rot": 1,
+       "placed": true,
+       "roomId": "home",
+       "state": true
+      },
+      {
+       "id": "starter-decks",
+       "type": "decks",
+       "x": 5,
+       "y": 1,
+       "rot": 0,
+       "placed": true,
+       "roomId": "home",
+       "state": true
+      }
+     ],
+     "lighting": "amber"
+    }
+   ]
+  }
+ },
+ {
+  "type": "shop",
+  "shop": {
+   "collections": [
+    {
+     "key": "loft",
+     "name": "Soft loft",
+     "tagline": "Warm light, soft corners"
+    }
+   ],
+   "categories": [
+    {
+     "key": "seating",
+     "name": "Seating"
+    },
+    {
+     "key": "tables",
+     "name": "Tables"
+    }
+   ],
+   "entries": [
+    {
+     "type": "sofa",
+     "name": "Mint daybed sofa",
+     "description": "Room for two and a nap.",
+     "price": 75,
+     "w": 2,
+     "d": 1,
+     "seats": 2,
+     "collection": "loft",
+     "category": "seating",
+     "featured": false,
+     "atlas": {
+      "url": "assets/furniture/atlas-1.png",
+      "width": 1024,
+      "height": 1024
+     },
+     "crop": [
+      0,
+      0,
+      200,
+      150
+     ]
+    },
+    {
+     "type": "table",
+     "name": "Tulip cafe table",
+     "description": "Coffee for two.",
+     "price": 35,
+     "w": 1,
+     "d": 1,
+     "seats": 0,
+     "collection": "loft",
+     "category": "tables",
+     "featured": true,
+     "atlas": {
+      "url": "assets/furniture/atlas-1.png",
+      "width": 1024,
+      "height": 1024
+     },
+     "crop": [
+      200,
+      0,
+      100,
+      150
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "type": "open",
+  "route": "WrapGift",
+  "data": {
+   "itemId": "bought-sofa"
+  }
+ },
+ {
   "type": "unknown-future-event",
   "value": 1
  }

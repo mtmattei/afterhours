@@ -63,4 +63,21 @@ test('the shared event fixture matches what host.mjs produces', async () => {
   const chrome = chromeFrom({querySelector: () => el}, {getScene: () => ({personal: false, roomIndex: 0}), roomKey: () => 'public:0'}, {classList: {contains: () => false}});
   delete globalThis.window;
   assert.deepEqual(shape(of('chrome').chrome), shape(chrome));
+  // The inventory slices are raw save data; check them against a game that bought a piece and saved a blueprint.
+  const g = fresh(), t = Date.UTC(2026, 9, 20);
+  g.dispatch('buy', {type: 'sofa'}, t);
+  g.dispatch('blueprint', {room: 'home', name: 'Your afterhours'}, t);
+  const inventory = fixture.find(e => e.type === 'slices' && 'items' in e.slices).slices;
+  assert.deepEqual(shape(inventory.items), shape(g.state.items));
+  assert.deepEqual(shape(inventory.rooms), shape(g.state.rooms));
+  assert.deepEqual(shape(inventory.blueprints), shape(g.state.blueprints));
+});
+
+test('panels that moved to XAML are requests to the host, not game markup', async () => {
+  const game = await readFile(new URL('../dist/game.js', import.meta.url), 'utf8');
+  for (const title of ['THE FURNITURE SHOP', 'THE AFTERHOURS COLLECTION', 'BLUEPRINTS', 'WRAP A GIFT'])
+    assert.ok(!game.includes(`'${title}'`), title + ' is still built by the game');
+  assert.match(game, /function catalog\(tab='shop'\)\{openPanel\('Catalog',\{tab\}\);\}/);
+  assert.match(game, /function blueprints\(\)\{openPanel\('Blueprints'\);\}/);
+  assert.match(game, /openPanel\('WrapGift',\{itemId:item\.id\}\)/);
 });

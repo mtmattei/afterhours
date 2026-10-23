@@ -42,10 +42,13 @@
     s.coins=coins;s.activeRoom=activeRoomId;s.profile.avatar=spriteIndex;
   }
   persist=function(){if(window.AfterhoursOnline?.remoteRoom()){toast('Only the room owner can move these pieces.');return;}saveWorld();legacyPersist();game.save();window.AfterhoursOnline?.saveLayout();};
+  // Asks the hosting app to open one of its own panels (the Uno app draws these in XAML). The game's own
+  // dialog closes first: it sits in the browser's top layer and would cover the app's panel.
+  const openPanel=(route,data={})=>{close();window.AfterhoursHost?.open(route,data);};
   function act(type,payload={},success){
     if((type==='buy'||type==='room')&&!payload.id)payload.id=G.uid();
     try{saveWorld();const result=game.dispatch(type,payload);sync();if(success)toast(typeof success==='function'?success(result):success);return {ok:true,result};}
-    catch(e){notifyError(e.message);return {ok:false};}
+    catch(e){notifyError(e.message);return {ok:false,error:e.message};}
   }
   function notifyError(text){
     const el=get('panelError');if(el){el.textContent=text;el.hidden=false;}else toast(text);
@@ -223,48 +226,27 @@
   }
   const category=type=>Furniture.catalog[type].category||(['sofa','seat','table'].includes(type)?'lounge':['decks','speaker','records','jukebox'].includes(type)?'music':['vending','portal','dice','notice','bowl','gift'].includes(type)?'interactive':'decor');
   const collections=[['all','All collections','A room that feels like you'],['loft','Soft loft','Warm wood. Soft edges. Slow evenings.'],['diner','Midnight diner','Coffee and company, all night long.'],['studio','Sound studio','Find your sound. Make some noise.'],['arcade','Arcade nights','One more game before we go.'],['garden','Secret garden','Make a little room to breathe.'],['fantasy','Starlit fantasy','Moonlight, crystal, and a little magic.'],['den','After-hours den','Leather, chrome, and the good speakers.'],['originals','Afterhours originals','The pieces that started the night.']];
-  function catalog(tab='shop',filter='all',query='',collection='all'){
-    const selected=collections.find(c=>c[0]===collection)||collections[0];
-    panel('Room for imagination','THE FURNITURE SHOP',topTabs([['shop','Shop furniture'],['owned','My inventory'],['discs','Records']],tab)+
-      (tab==='discs'?`<p>Your own music, pressed into keepsakes. Each disc costs 10 credits and preserves that version of the song.</p><div id="catalogCards" class="record-grid"></div>`:
-      `<div class="catalog-layout"><nav class="collection-list" aria-label="Furniture collections">${collections.map(([key,name])=>`<button data-collection="${key}" class="${key===collection?'selected':''}" aria-pressed="${key===collection}"><span>${name}</span><small>${Object.values(Furniture.catalog).filter(c=>key==='all'||(c.collection||'originals')===key).length}</small></button>`).join('')}</nav><div class="catalog-main"><div class="collection-heading"><h3>${selected[1]}</h3><p>${selected[2]}</p></div><div class="catalog-toolbar"><input id="catalogSearch" class="search-field" value="${h(query)}" placeholder="Find your next favorite piece…" aria-label="Search furniture"><select id="catalogCategory" aria-label="Furniture category">${[['all','Every kind'],['lounge','Seats & tables'],['music','Music'],['interactive','Interactive'],['decor','Decor']].map(([value,name])=>`<option value="${value}" ${filter===value?'selected':''}>${name}</option>`).join('')}</select></div><p class="catalog-balance">${credit(game.state.coins)} to spend · ${game.state.items.length} pieces in your collection</p><div id="catalogCards" class="furniture-grid"></div></div></div>`),true);
-    get('modal').classList.add('catalog-modal');
-    buttons('[data-tab]',b=>catalog(b.dataset.tab));buttons('[data-collection]',b=>catalog(tab,filter,query,b.dataset.collection));
-    if(tab==='discs'){
-      get('catalogCards').innerHTML=game.state.discs.length?game.state.discs.map(d=>`<article class="song-card"><span class="disc-icon">◉</span><h3>${h(d.song.title)}</h3><p>by ${h(d.artist)} · ${d.song.bpm} BPM</p><button class="soft-button" data-play-disc="${d.id}">▶ Play record</button></article>`).join(''):'<p>Your record shelf is empty. Save a song in the studio, then press it in your library.</p>';
-      buttons('[data-play-disc]',b=>playSong(game.state.discs.find(d=>d.id===b.dataset.playDisc).song));return;
-    }
-    const refresh=()=>catalog(tab,get('catalogCategory').value,get('catalogSearch').value,collection);
-    get('catalogCategory').onchange=refresh;
-    get('catalogSearch').oninput=()=>{const p=get('catalogSearch').selectionStart;refresh();get('catalogSearch').focus();get('catalogSearch').setSelectionRange(p,p);};
-    const entries=tab==='shop'?Object.keys(Furniture.catalog).sort((a,b)=>Number(!!Furniture.catalog[b].atlas)-Number(!!Furniture.catalog[a].atlas)).map(type=>({type})):game.state.items;
-    const filtered=entries.filter(i=>{const c=Furniture.catalog[i.type];return !i.wrapped&&(filter==='all'||category(i.type)===filter)&&(collection==='all'||(c.collection||'originals')===collection)&&(c.name+' '+(c.description||'')+' '+(c.collection||'originals')).toLowerCase().includes(query.toLowerCase());});
-    if(!filtered.length)get('catalogCards').innerHTML='<p class="empty-state">No pieces here yet. Try another collection or search.</p>';
-    filtered.forEach(item=>{
-      const c=Furniture.catalog[item.type],b=document.createElement('button');b.className='furniture-card';
-      const name=document.createElement('b');name.textContent=c.name;const detail=document.createElement('small');detail.textContent=tab==='shop'?c.price+' ✦'+(c.seats?' · '+c.seats.length+(c.seats.length===1?' seat':' seats'):''):item.placed===false?'In inventory':(game.state.rooms.find(r=>r.id===item.roomId)?.name||'In room');
-      b.append(artCard(item.type),name,detail);b.onclick=()=>itemDetails(item.type,tab==='owned'?item.id:null);get('catalogCards').append(b);
-    });
-  }
+  // The furniture shop, inventory and records are XAML panels in the Uno app.
+  function catalog(tab='shop'){openPanel('Catalog',{tab});}
   const descriptions={
     sofa:'Two seats for long conversations.',seat:'A little corner for a quiet moment.',table:'A warm glow and a place to gather.',decks:'Open the studio, make a track, and take it to the stage.',
     speaker:'Play a song from your library in your room.',records:'Your collection of original music discs.',plant:'A little green. Water it and watch it glow.',lamp:'Switch the light on or off. Set the mood.',
     jukebox:'Build a room playlist from your own songs.',vending:'Walk over, grab a soda, and enjoy it. Refills cost 2 credits.',portal:'Link this portal to one of your rooms.',dice:'Roll a six-sided die for your own room games.',notice:'Leave a note for your room.',bowl:'Feed and care for your companion.',gift:'Wrap an owned piece with a personal note, then open it to reveal the surprise.'
   };
-  function itemDetails(type,id){
-    const item=game.state.items.find(i=>i.id===id),c=Furniture.catalog[type];
-    panel(c.name,'THE AFTERHOURS COLLECTION',`<div id="itemPreview" class="item-preview"></div><p>${h(c.description||descriptions[type])}</p><p>${c.w} × ${c.d} tiles · ${item?'Owned':credit(c.price)}</p><div class="button-row"><button id="itemPrimary" class="primary">${item?'Place / move piece':'Buy for '+c.price+' ✦'}</button>${item?'<button id="itemUse" class="soft-button">Interact</button>':''}<button id="backCatalog" class="soft-button">Back to catalog</button></div>`);
-    get('itemPreview').append(artCard(type));button('backCatalog',()=>catalog(item?'owned':'shop'));
-    button('itemPrimary',async()=>{
-      let owned=item;
-      if(!owned){const out=act('buy',{type},'Added to your collection.');if(!out.ok)return;owned=game.state.items.find(i=>i.id===out.result.id);}
-      const destination=owned.placed!==false?owned.roomId:activeRoomId;
-      if(window.AfterhoursOnline?.connected()){
-        if(!await window.AfterhoursOnline.visitOwnRoom(destination))return;
-      }else if(owned.placed!==false&&owned.roomId!==activeRoomId)visitRoom(owned.roomId);else if(!personal)visitRoom(activeRoomId);
-      sync();startEditing();close();selectFurniture(owned.id);toast('Choose a clear tile. R rotates; Esc cancels.');
-    });
-    button('itemUse',()=>{if(item.placed===false){notifyError('Place this piece in a room first.');return;}if(item.roomId!==activeRoomId||!personal)visitRoom(item.roomId);openObject(game.state.items.find(i=>i.id===id));});
+  // Takes an owned piece to its room (or your room) and selects it for placement.
+  async function placeItem(id){
+    const owned=game.state.items.find(i=>i.id===id);if(!owned)return false;
+    const destination=owned.placed!==false?owned.roomId:activeRoomId;
+    if(window.AfterhoursOnline?.connected()){
+      if(!await window.AfterhoursOnline.visitOwnRoom(destination))return false;
+    }else if(owned.placed!==false&&owned.roomId!==activeRoomId)visitRoom(owned.roomId);else if(!personal)visitRoom(activeRoomId);
+    sync();startEditing();close();selectFurniture(owned.id);toast('Choose a clear tile. R rotates; Esc cancels.');return true;
+  }
+  // Interacts with an owned piece where it stands.
+  function useItem(id){
+    const item=game.state.items.find(i=>i.id===id);if(!item)return {ok:false,error:'That piece is no longer in your collection.'};
+    if(item.placed===false)return {ok:false,error:'Place this piece in a room first.'};
+    if(item.roomId!==activeRoomId||!personal)visitRoom(item.roomId);openObject(game.state.items.find(i=>i.id===id));return {ok:true};
   }
   showInventory=()=>catalog('owned');button('openInventory',showInventory);
   function roomTools(){
@@ -277,10 +259,11 @@
     get('roomSettings').onsubmit=e=>{e.preventDefault();const out=act('roomSettings',{id:r.id,name:get('settingsName').value,description:get('settingsDescription').value,tags:get('settingsTags').value,lighting:get('roomLighting').value,door:get('roomDoor').value},'Room settings saved.');if(out.ok){get('roomTitle').textContent=room().name;close();}};
     button('blueprints',blueprints);button('roomRules',rulesPanel);button('roomNotes',notesPanel);button('roomPlaylist',playlistPanel);button('roomEvent',eventPanel);
   }
-  function blueprints(){
-    panel('Keep a room in your pocket','BLUEPRINTS',`<p>A blueprint remembers positions and lighting. Restoring moves your owned pieces back into place.</p><button class="primary" id="saveBlueprint">Save current layout</button><div class="directory-list">${game.state.blueprints.map(b=>`<div class="directory-room"><span><b>${h(b.name)}</b><small>${b.items.length} pieces</small></span><button class="soft-button" data-blueprint="${b.id}">Restore</button></div>`).join('')||'<p>No blueprints yet.</p>'}</div>`);
-    button('saveBlueprint',()=>{if(act('blueprint',{room:activeRoomId,name:room().name},'Blueprint saved.').ok)blueprints();});
-    buttons('[data-blueprint]',b=>{const bp=game.state.blueprints.find(x=>x.id===b.dataset.blueprint);if(act('restoreBlueprint',{id:bp.id},'Layout restored.').ok){visitRoom(bp.room);}});
+  function blueprints(){openPanel('Blueprints');}
+  function saveBlueprint(){return act('blueprint',{room:activeRoomId,name:room().name},'Blueprint saved.');}
+  function restoreBlueprint(id){
+    const bp=game.state.blueprints.find(x=>x.id===id),out=act('restoreBlueprint',{id},'Layout restored.');
+    if(out.ok&&bp)visitRoom(bp.room);return out;
   }
   function notesPanel(){
     panel('Leave a little something','MESSAGE BOARD',`<form id="noteForm"><label class="form-field">Your note<textarea id="noteText" maxlength="180" placeholder="A message for this room…"></textarea></label><button class="primary">Pin note</button></form><div class="notes-grid">${room().notes.map(n=>`<article><p>${h(n.text)}</p><small>${h(n.name)}</small><button data-remove-note="${n.id}" aria-label="Remove note">×</button></article>`).join('')}</div>`);
@@ -516,11 +499,7 @@
     }
     if(item.type==='gift'){
       if(item.contents)use('Open your gift',()=>{act('itemAction',{id:item.id,action:'unwrap'},'Your gift is in the inventory.');});
-      else actions.push({label:'Wrap a piece',direct:true,fn:()=>{
-        const options=game.state.items.filter(i=>i.id!==item.id&&i.placed===false&&!i.wrapped);
-        panel('A small surprise','WRAP A GIFT',`<p>Choose a piece from your inventory. It stays safely inside this box until opened.</p><select id="giftContents" class="search-field">${options.map(i=>`<option value="${i.id}">${h(Furniture.catalog[i.type].name)}</option>`).join('')}</select>${field('Personal note','giftNote','','Made me think of you.')}<button id="wrapGift" class="primary" ${options.length?'':'disabled'}>Wrap gift</button>`);
-        button('wrapGift',()=>{if(act('itemAction',{id:item.id,action:'wrap',content:get('giftContents').value,note:get('giftNote').value},'A little surprise, wrapped and ready.').ok)close();});
-      }});
+      else actions.push({label:'Wrap a piece',direct:true,fn:()=>{close();openPanel('WrapGift',{itemId:item.id});}});
     }
     panel(c.name,'ROOM INTERACTION',`<div id="objectPreview" class="item-preview"></div><p>${h(item.contents?item.note:c.description||descriptions[item.type])}</p><div class="button-row">${actions.map((a,i)=>`<button class="${i===0?'primary':'soft-button'}" data-object-action="${i}">${h(a.label)}</button>`).join('')}<button class="soft-button" id="objectMove">Move / rotate</button></div>`);
     get('objectPreview').append(artCard(item.type));buttons('[data-object-action]',b=>{const a=actions[+b.dataset.objectAction];if(a.direct)a.fn();else approach(item,a.fn);});
@@ -660,7 +639,16 @@
     spriteImage,backImage,seatedImage,seatedCrops,drawAvatarLabels,drawWalker,avatarDepth,markArrival,drawArrival,
     setSeat:offers=>useSeat(offers),stand:()=>standUp(),navigationOptions,refreshWhispers,
     openJournal:journal,download,stagePanel,playSong,stopMusic,
-    openCatalog:catalog,openNavigator,
+    openCatalog:catalog,openNavigator,act,placeItem,useItem,saveBlueprint,restoreBlueprint,
+    wrapGift:(id,content,note)=>act('itemAction',{id,action:'wrap',content,note},'A little surprise, wrapped and ready.'),
+    playDisc:id=>{const disc=game.state.discs.find(d=>d.id===id);if(disc)playSong(disc.song);return !!disc;},
+    // The shop as data: collections, categories and every piece with its atlas crop.
+    shopData:()=>({collections:collections.map(([key,name,tagline])=>({key,name,tagline})),
+      categories:[['all','Every kind'],['lounge','Seats & tables'],['music','Music'],['interactive','Interactive'],['decor','Decor']].map(([key,name])=>({key,name})),
+      entries:Object.entries(Furniture.catalog).map(([type,c])=>{const {crop,image}=furnitureArt(type);return {type,name:c.name,description:c.description||descriptions[type]||'',price:c.price,w:c.w,d:c.d,seats:c.seats?.length||0,
+        collection:c.collection||'originals',category:category(type),featured:!!c.atlas,
+        atlas:{url:new URL(image.getAttribute('src'),location.href).href,width:image.naturalWidth,height:image.naturalHeight},crop};})}),
+    shopImages:()=>[...new Set(Object.keys(Furniture.catalog).map(type=>furnitureArt(type).image))],
     updateHUD,showStudio:studio,
     setActiveRoom:id=>{activeRoomId=id;game.state.activeRoom=id;},
     applyState:state=>{game.state=state;activeRoomId=state.activeRoom||state.rooms[0].id;spriteIndex=state.profile.avatar||0;sync();draft=copy(state.draft);$('.profile-art').style.backgroundPosition=(-spriteIndex*35)+'px -4px';resetPet();}

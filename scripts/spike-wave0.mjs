@@ -1,4 +1,5 @@
 // Wave 0 spike check: drives the published Uno app in Chromium and records each risk's result.
+// It targets the spike build (commit 9456eaa) and its test controls; scripts/verify-wave1.mjs checks the current app.
 // Usage: node scripts/spike-wave0.mjs [baseUrl] [outDir]
 import {createRequire} from 'node:module';
 const {chromium} = createRequire(import.meta.url)('playwright');

@@ -3,6 +3,8 @@
     <TargetFrameworks>net10.0-browserwasm</TargetFrameworks>
 
     <OutputType>Exe</OutputType>
+    <!-- Required by the JSImport/JSExport source generator. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <UnoSingleProject>true</UnoSingleProject>
     <!-- Browser targets use NuGet/runtime packs and do not need Windows SDK registry discovery. -->
     <TargetPlatformSdkPath>$(MSBuildSDKsPath)</TargetPlatformSdkPath>

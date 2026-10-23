@@ -2,6 +2,7 @@
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:interop="using:Afterhours.Uno.Interop"
+      xmlns:uen="using:Uno.Extensions.Navigation.UI"
       Background="#14141B">
   <!-- WAVE 0 SPIKE: XAML controls above the hosted game room. Replaced in wave 1. -->
   <Grid Background="#14141B">
@@ -29,6 +30,7 @@
           </Flyout>
         </Button.Flyout>
       </Button>
+      <Button x:Name="RouteButton" Content="Open route panel" uen:Navigation.Request="!SpikePanel" />
       <TextBlock x:Name="SpikeStatus" Foreground="#92929F" VerticalAlignment="Center" AutomationProperties.AutomationId="SpikeStatus" />
     </StackPanel>
     <interop:RoomHost x:Name="Room" Grid.Row="1" />

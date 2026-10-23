@@ -114,6 +114,26 @@ await page.locator('.ah-root #closeModal').click();
 const dialogClosed = await page.evaluate(() => !document.querySelector('.ah-root #modal')?.open);
 record('R2 js dialog', dialogOpen && dialogClosed, {dialogOpen, dialogClosed});
 
+// Navigation "!" route: a Page opens as a flyout over the room and its MVUX command works.
+const route = page.getByText('Open route panel', {exact: true});
+if (await route.count()) {
+  await route.click();
+  await page.waitForTimeout(800);
+  const title = page.getByText('A route panel over the room', {exact: true});
+  const shown = await title.isVisible().catch(() => false);
+  const routeBox = await page.getByText('Count with MVUX', {exact: true}).boundingBox().catch(() => null);
+  const roomBox = await page.locator('.ah-root canvas#room').boundingBox();
+  const routeOverCanvas = !!routeBox && routeBox.y > roomBox.y && routeBox.y < roomBox.y + roomBox.height;
+  await page.screenshot({path: path.join(out, '04-route-flyout.png')});
+  await page.getByText('Count with MVUX', {exact: true}).click();
+  await page.waitForTimeout(500);
+  const counted = await page.evaluate(() => [...document.querySelectorAll('*')].some(e => e.childElementCount === 0 && e.textContent === '1' && !e.closest('.ah-root')));
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(600);
+  const closed = !(await title.isVisible().catch(() => false));
+  record('Navigation ! route', shown && routeOverCanvas && counted && closed, {shown, routeOverCanvas, counted, closed});
+}
+
 // Audio: a click on a XAML button starts the game's AudioContext under the real autoplay policy.
 await page.getByText('Play beat', {exact: true}).click();
 await page.waitForTimeout(1200);
